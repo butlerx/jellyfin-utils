@@ -24,6 +24,25 @@ CLI flags (`--server`, `--token`) override env vars.
 
 ---
 
+## Usage
+
+All commands are available through the unified `jellyfin` CLI:
+
+```bash
+uv run jellyfin --help
+uv run jellyfin watched [OPTIONS]
+uv run jellyfin stale [OPTIONS]
+```
+
+Standalone entry points also work:
+
+```bash
+uv run jellyfin-watched [OPTIONS]
+uv run jellyfin-stale [OPTIONS]
+```
+
+---
+
 ## Scripts
 
 ### `jellyfin-watched`
@@ -226,13 +245,19 @@ private.
    `main`
 2. Import shared client:
    `from jellyfin_utils.client import build_headers, get_users, ...`
-3. Add an entry point in `pyproject.toml`:
+3. Register the command in `jellyfin_utils/cli.py`:
+   ```python
+   from jellyfin_utils.your_script.cli import main as your_script
+   cli.add_command(your_script, "your-script")
+   ```
+4. Add entry points in `pyproject.toml`:
    ```toml
    [project.scripts]
+   jellyfin = "jellyfin_utils.cli:cli"
    jellyfin-watched = "jellyfin_utils.watched:main"
    jellyfin-your-script = "jellyfin_utils.your_script:main"
    ```
-4. Run `uv sync` to register the new command
+5. Run `uv sync` to register the new command
 
 ### Linting & Type Checking
 

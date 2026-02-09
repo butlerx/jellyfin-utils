@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = ["click>=8.1.0", "orjson>=3.11.7", "requests>=2.32.5"]
 
 [project.scripts]
+jellyfin = "jellyfin_utils.cli:cli"
 jellyfin-watched = "jellyfin_utils.watched:main"
 jellyfin-stale = "jellyfin_utils.stale:main"
 
