@@ -8,6 +8,7 @@ dependencies = ["click>=8.1.0", "orjson>=3.11.7", "requests>=2.32.5"]
 
 [project.scripts]
 jellyfin-watched = "jellyfin_utils.watched:main"
+jellyfin-stale = "jellyfin_utils.stale:main"
 
 [tool.uv]
 package = true

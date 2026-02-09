@@ -114,6 +114,89 @@ Breaking Bad - S01E01 - Pilot                      | 4/4 users (100.0%) |   3.21
 
 ---
 
+### `jellyfin-stale`
+
+Identifies movies and TV shows that **nobody (or almost nobody) has watched** —
+content sitting on disk unused that could be removed to free up space.
+
+- Configurable watcher threshold (default 0 = completely unwatched)
+- Minimum age filter to skip recently-added content
+- Per-item stats: watch count, percentage, age, and file size
+- Sorted by file size (largest first) to prioritize space savings
+- Grouped by media type (Movies, Series, Episodes)
+- Skips items already removed from disk
+- Ignore specific users (e.g., guests, kids)
+- Output formats: text, JSON, or CSV
+
+#### Examples
+
+```bash
+# Basic usage (completely unwatched content)
+uv run jellyfin-stale \
+  --server http://jellyfin.lan:8096 \
+  --token YOUR_API_KEY
+
+# Include items watched by at most 1 user
+uv run jellyfin-stale --max-watchers 1
+
+# Only flag content older than 90 days (skip recent additions)
+uv run jellyfin-stale --min-age 90
+
+# Ignore guest accounts
+uv run jellyfin-stale --ignore-user guest --ignore-user kid1
+
+# CSV for spreadsheet analysis
+uv run jellyfin-stale --output csv > stale.csv
+
+# JSON for scripting
+uv run jellyfin-stale --output json | jq '.stale_count'
+
+# Quiet mode (just the list, no summary)
+uv run jellyfin-stale --quiet
+```
+
+#### Options
+
+```
+--server TEXT             Jellyfin server URL (or JELLYFIN_SERVER env var)  [required]
+--token TEXT              API key (or JELLYFIN_TOKEN env var)  [required]
+--ignore-user TEXT        Username to exclude from analysis (repeatable)
+--min-age INTEGER         Only flag items added more than N days ago
+--max-watchers INTEGER    Max users who watched for item to be stale (default: 0)
+--output [text|json|csv]  Output format (default: text)
+--quiet                   Text mode: skip summary, show only stale list
+--help                    Show this message and exit
+```
+
+#### Sample Output
+
+```
+Total users: 5
+Ignoring users: guest
+Active users analyzed: 4
+Stale threshold: watched by <= 0 users
+Total library items scanned: 1234
+
+Stale items (watched by <=0 users): 89
+Total size of stale content: 312.45 GB
+
+================================================================================
+Movies (52 items)
+================================================================================
+Some Unwatched Movie                               | 0/4 users (0.0%) |  15.67 GB | 245d old
+  ID: abc123def456
+  Path: /media/movies/Some Unwatched Movie (2020)/Some Unwatched Movie.mkv
+
+================================================================================
+Episodes (31 items)
+================================================================================
+Obscure Show - S01E01 - Pilot                      | 0/4 users (0.0%) |   2.10 GB | 180d old
+  ID: episode789
+  Path: /media/tv/Obscure Show/Season 01/S01E01.mkv
+```
+
+---
+
 ## Development
 
 ### Prerequisites

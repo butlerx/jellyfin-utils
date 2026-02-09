@@ -15,6 +15,7 @@ __all__ = [
     "display_name",
     "get_all_items",
     "get_users",
+    "get_watch_counts_per_item",
     "get_watchers_per_item",
     "parse_last_played",
     "size_gb",
@@ -55,7 +56,7 @@ def get_all_items(
     headers: dict[str, str],
     *,
     include_types: str = "Movie,Series,Episode",
-    fields: str = "Path,MediaSources,SeriesName,SeasonName,IndexNumber,ParentIndexNumber",
+    fields: str = "Path,MediaSources,SeriesName,SeasonName,IndexNumber,ParentIndexNumber,DateCreated",
 ) -> list[LibraryItem]:
     """Fetch library items as immutable ``LibraryItem`` instances."""
     params = {
@@ -113,3 +114,14 @@ def get_watchers_per_item(
                 watchers.setdefault(item_id, []).append(username)
 
     return watchers
+
+
+def get_watch_counts_per_item(
+    base_url: str,
+    headers: dict[str, str],
+    users: list[dict],
+    ignore_usernames: set[str],
+) -> dict[str, int]:
+    """Return a mapping of ``item_id`` to how many users have watched it (all-time)."""
+    watchers = get_watchers_per_item(base_url, headers, users, ignore_usernames, max_age_days=None)
+    return {item_id: len(usernames) for item_id, usernames in watchers.items()}

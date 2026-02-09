@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 
 
@@ -25,6 +26,7 @@ class LibraryItem:
     series_name: str | None
     parent_index: int | None
     episode_index: int | None
+    date_created: dt.datetime | None
 
     @classmethod
     def from_api(cls, raw: dict) -> LibraryItem | None:
@@ -32,6 +34,10 @@ class LibraryItem:
         item_id = raw.get("Id")
         if not item_id:
             return None
+
+        date_str = raw.get("DateCreated")
+        date_created = dt.datetime.fromisoformat(date_str) if date_str else None
+
         return cls(
             item_id=item_id,
             name=raw.get("Name", "<no name>"),
@@ -41,6 +47,7 @@ class LibraryItem:
             series_name=raw.get("SeriesName"),
             parent_index=raw.get("ParentIndexNumber"),
             episode_index=raw.get("IndexNumber"),
+            date_created=date_created,
         )
 
 
