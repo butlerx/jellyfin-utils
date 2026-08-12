@@ -27,6 +27,7 @@ class LibraryItem:
     parent_index: int | None
     episode_index: int | None
     date_created: dt.datetime | None
+    tmdb_id: int | None
 
     @classmethod
     def from_api(cls, raw: dict) -> LibraryItem | None:
@@ -38,6 +39,10 @@ class LibraryItem:
         date_str = raw.get("DateCreated")
         date_created = dt.datetime.fromisoformat(date_str) if date_str else None
 
+        provider_ids = raw.get("ProviderIds") or {}
+        series_provider_ids = raw.get("SeriesProviderIds") or {}
+        tmdb_id = provider_ids.get("Tmdb") or series_provider_ids.get("Tmdb")
+
         return cls(
             item_id=item_id,
             name=raw.get("Name", "<no name>"),
@@ -48,6 +53,7 @@ class LibraryItem:
             parent_index=raw.get("ParentIndexNumber"),
             episode_index=raw.get("IndexNumber"),
             date_created=date_created,
+            tmdb_id=int(tmdb_id) if tmdb_id is not None else None,
         )
 
 

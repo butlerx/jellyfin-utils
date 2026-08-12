@@ -56,7 +56,10 @@ def get_all_items(
     headers: dict[str, str],
     *,
     include_types: str = "Movie,Series,Episode",
-    fields: str = "Path,MediaSources,SeriesName,SeasonName,IndexNumber,ParentIndexNumber,DateCreated",
+    fields: str = (
+        "Path,MediaSources,SeriesName,SeasonName,IndexNumber,ParentIndexNumber,DateCreated,"
+        "ProviderIds,SeriesProviderIds"
+    ),
 ) -> list[LibraryItem]:
     """Fetch library items as immutable ``LibraryItem`` instances."""
     params = {

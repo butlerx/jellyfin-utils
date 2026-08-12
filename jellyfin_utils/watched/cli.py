@@ -5,26 +5,39 @@ from __future__ import annotations
 import click
 
 from jellyfin_utils.client import LibraryItem, build_headers, get_all_items, get_users, get_watchers_per_item
+from jellyfin_utils.jellyseerr import get_requesters_by_tmdb_id
 
 from .models import Candidate
-from .render import MEDIA_TYPE_ORDER, render_csv, render_json, render_text
+from .render import MEDIA_TYPE_ORDER, render_csv, render_json, render_markdown, render_text
 
 
 def _make_candidate(
     item: LibraryItem,
     watchers: dict[str, list[str]],
     total_active_users: int,
+    requesters_by_tmdb_id: dict[int, tuple[str, ...]] | None = None,
 ) -> Candidate | None:
     """Build a ``Candidate`` if the item has watchers, otherwise ``None``."""
     item_watchers = watchers.get(item.item_id, [])
     if not item_watchers:
         return None
     watch_pct = (len(item_watchers) / total_active_users * 100) if total_active_users > 0 else 0
+    requested_by = (
+        requesters_by_tmdb_id.get(item.tmdb_id, ())
+        if requesters_by_tmdb_id is not None and item.tmdb_id is not None
+        else ()
+    )
+    watcher_names = {username.casefold() for username in item_watchers}
+    watched_by_requester = tuple(
+        username for username in requested_by if username.casefold() in watcher_names
+    )
     return Candidate(
         item=item,
         watch_count=len(item_watchers),
         watch_percentage=round(watch_pct, 1),
         watched_by=tuple(sorted(item_watchers)),
+        requested_by=requested_by,
+        watched_by_requester=watched_by_requester,
     )
 
 
@@ -33,6 +46,7 @@ def find_candidates(
     watchers: dict[str, list[str]],
     total_active_users: int,
     threshold_percent: int,
+    requesters_by_tmdb_id: dict[int, tuple[str, ...]] | None = None,
 ) -> list[Candidate]:
     """Pure pipeline: filter on-disk items → enrich with watch data → threshold → sort."""
     threshold_count = (threshold_percent / 100.0) * total_active_users
@@ -41,10 +55,10 @@ def find_candidates(
             c
             for item in all_items
             if item.path
-            and (c := _make_candidate(item, watchers, total_active_users)) is not None
+            and (c := _make_candidate(item, watchers, total_active_users, requesters_by_tmdb_id)) is not None
             and c.watch_count >= threshold_count
         ),
-        key=lambda c: (-c.item.size, -c.watch_percentage),
+        key=lambda c: (not c.requester_watched, -c.item.size, -c.watch_percentage),
     )
 
 
@@ -89,9 +103,19 @@ def group_by_type(candidates: list[Candidate]) -> dict[str, list[Candidate]]:
     help="Percentage of users who must have watched an item for it to be a candidate.",
 )
 @click.option(
+    "--jellyseerr-server",
+    envvar="JELLYSEERR_SERVER",
+    help="Jellyseerr server base URL; enables requester-watch prioritization.",
+)
+@click.option(
+    "--jellyseerr-token",
+    envvar="JELLYSEERR_TOKEN",
+    help="Jellyseerr API key; required with --jellyseerr-server.",
+)
+@click.option(
     "--output",
     "output_format",
-    type=click.Choice(["text", "json", "csv"], case_sensitive=False),
+    type=click.Choice(["text", "json", "csv", "markdown"], case_sensitive=False),
     default="text",
     show_default=True,
     help="Output format.",
@@ -107,10 +131,16 @@ def main(
     ignore_user: tuple[str, ...],
     days: int | None,
     threshold: int,
+    jellyseerr_server: str | None,
+    jellyseerr_token: str | None,
     output_format: str,
     quiet: bool,  # noqa: FBT001
 ) -> None:
     """Analyze Jellyfin usage and list media safe to delete."""
+    if bool(jellyseerr_server) != bool(jellyseerr_token):
+        message = "--jellyseerr-server and --jellyseerr-token must be used together."
+        raise click.UsageError(message)
+
     base_url = server.rstrip("/")
     headers = build_headers(token)
 
@@ -127,7 +157,12 @@ def main(
 
     active_user_count = sum(1 for u in users if u.get("Name") not in ignore_usernames)
     all_items = get_all_items(base_url, headers)
-    candidates = find_candidates(all_items, watchers, active_user_count, threshold)
+    requesters_by_tmdb_id = (
+        get_requesters_by_tmdb_id(jellyseerr_server.rstrip("/"), jellyseerr_token)
+        if jellyseerr_server and jellyseerr_token
+        else None
+    )
+    candidates = find_candidates(all_items, watchers, active_user_count, threshold, requesters_by_tmdb_id)
     grouped = group_by_type(candidates)
 
     match output_format:
@@ -143,10 +178,13 @@ def main(
                     threshold=threshold,
                     total_items=len(all_items),
                     max_age_days=days,
+                    jellyseerr_enabled=requesters_by_tmdb_id is not None,
                 )
             )
         case "csv":
             click.echo(render_csv(candidates), nl=False)
+        case "markdown":
+            click.echo(render_markdown(candidates, active_user_count))
         case _:
             click.echo(
                 render_text(
@@ -159,6 +197,7 @@ def main(
                     threshold=threshold,
                     total_items=len(all_items),
                     max_age_days=days,
+                    jellyseerr_enabled=requesters_by_tmdb_id is not None,
                 )
             )
 

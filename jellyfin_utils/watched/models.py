@@ -17,3 +17,10 @@ class Candidate:
     watch_count: int
     watch_percentage: float
     watched_by: tuple[str, ...]
+    requested_by: tuple[str, ...] = ()
+    watched_by_requester: tuple[str, ...] = ()
+
+    @property
+    def requester_watched(self) -> bool:
+        """Whether at least one Jellyseerr requester watched this item."""
+        return bool(self.watched_by_requester)

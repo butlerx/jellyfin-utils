@@ -19,6 +19,8 @@ class StaleItem:
     watch_count: int
     total_users: int
     age_days: int | None
+    requested_by: tuple[str, ...] = ()
+    watched_by_requester: tuple[str, ...] = ()
 
     @property
     def watch_percentage(self) -> float:
@@ -27,6 +29,11 @@ class StaleItem:
             return 0.0
         return round(self.watch_count / self.total_users * 100, 1)
 
+    @property
+    def requester_watched(self) -> bool:
+        """Whether at least one Jellyseerr requester watched this item."""
+        return bool(self.watched_by_requester)
+
     @classmethod
     def build(
         cls,
@@ -34,6 +41,8 @@ class StaleItem:
         watch_count: int,
         total_users: int,
         now: dt.datetime,
+        requested_by: tuple[str, ...] = (),
+        watched_by_requester: tuple[str, ...] = (),
     ) -> StaleItem:
         """Construct from a library item, computing age from ``date_created``."""
         age_days = (now - item.date_created).days if item.date_created else None
@@ -42,4 +51,6 @@ class StaleItem:
             watch_count=watch_count,
             total_users=total_users,
             age_days=age_days,
+            requested_by=requested_by,
+            watched_by_requester=watched_by_requester,
         )

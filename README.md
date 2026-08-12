@@ -13,14 +13,19 @@ uv sync
 
 ### Environment Variables
 
-All scripts share the same connection settings:
+All scripts share the Jellyfin connection settings. The watched and stale
+commands can also use Jellyseerr to prioritize content watched by the person who
+requested it:
 
-| Variable          | Purpose                                    |
-| ----------------- | ------------------------------------------ |
-| `JELLYFIN_SERVER` | Base URL (e.g. `http://jellyfin.lan:8096`) |
-| `JELLYFIN_TOKEN`  | API key / token                            |
+| Variable            | Purpose                                        |
+| ------------------- | ---------------------------------------------- |
+| `JELLYFIN_SERVER`   | Base URL (e.g. `http://jellyfin.lan:8096`)     |
+| `JELLYFIN_TOKEN`    | API key / token                                |
+| `JELLYSEERR_SERVER` | Base URL (e.g. `http://jellyseerr.lan:5055`)   |
+| `JELLYSEERR_TOKEN`  | API key; set together with `JELLYSEERR_SERVER` |
 
-CLI flags (`--server`, `--token`) override env vars.
+CLI flags override their matching environment variables. Set both Jellyseerr
+variables to enable requester-watch prioritization without passing CLI flags.
 
 ---
 
@@ -57,7 +62,8 @@ content everyone has already seen that can be safely removed to free up space.
 - Skips items already removed from disk
 - Ignore specific users (e.g., guests, kids)
 - Date filtering: only count recent plays
-- Output formats: text, JSON, or CSV
+- Optionally prioritize Jellyseerr requests the requester has watched
+- Output formats: text, Markdown, JSON, or CSV
 
 #### Examples
 
@@ -79,8 +85,16 @@ uv run jellyfin-watched --ignore-user guest --ignore-user kid1
 # Only count plays within the last year
 uv run jellyfin-watched --days 365
 
+# Prioritize Jellyseerr-requested content watched by its requester
+export JELLYSEERR_SERVER=http://jellyseerr.lan:5055
+export JELLYSEERR_TOKEN=YOUR_JELLYSEERR_API_KEY
+uv run jellyfin-watched
+
 # CSV for spreadsheet analysis
 uv run jellyfin-watched --output csv > candidates.csv
+
+# Markdown for a message, issue, or pull request
+uv run jellyfin-watched --output markdown > candidates.md
 
 # JSON for scripting
 uv run jellyfin-watched --output json | jq '.candidates_count'
@@ -97,7 +111,9 @@ uv run jellyfin-watched --quiet
 --ignore-user TEXT        Username to exclude from analysis (repeatable)
 --days INTEGER            Only count plays within last N days
 --threshold INTEGER       Percentage of users who must have watched (default: 80)
---output [text|json|csv]  Output format (default: text)
+--jellyseerr-server TEXT  Jellyseerr URL (or JELLYSEERR_SERVER env var)
+--jellyseerr-token TEXT   Jellyseerr API key (or JELLYSEERR_TOKEN env var)
+--output [text|json|csv|markdown]  Output format (default: text)
 --quiet                   Text mode: skip summary, show only candidate list
 --help                    Show this message and exit
 ```
@@ -145,7 +161,8 @@ content sitting on disk unused that could be removed to free up space.
 - Grouped by media type (Movies, Series, Episodes)
 - Skips items already removed from disk
 - Ignore specific users (e.g., guests, kids)
-- Output formats: text, JSON, or CSV
+- Optionally prioritizes Jellyseerr requests the requester has watched
+- Output formats: text, Markdown, JSON, or CSV
 
 #### Examples
 
@@ -164,8 +181,16 @@ uv run jellyfin-stale --min-age 90
 # Ignore guest accounts
 uv run jellyfin-stale --ignore-user guest --ignore-user kid1
 
+# Prioritize Jellyseerr-requested content watched by its requester
+export JELLYSEERR_SERVER=http://jellyseerr.lan:5055
+export JELLYSEERR_TOKEN=YOUR_JELLYSEERR_API_KEY
+uv run jellyfin-stale
+
 # CSV for spreadsheet analysis
 uv run jellyfin-stale --output csv > stale.csv
+
+# Markdown for a message, issue, or pull request
+uv run jellyfin-stale --output markdown > stale.md
 
 # JSON for scripting
 uv run jellyfin-stale --output json | jq '.stale_count'
@@ -182,7 +207,9 @@ uv run jellyfin-stale --quiet
 --ignore-user TEXT        Username to exclude from analysis (repeatable)
 --min-age INTEGER         Only flag items added more than N days ago
 --max-watchers INTEGER    Max users who watched for item to be stale (default: 0)
---output [text|json|csv]  Output format (default: text)
+--jellyseerr-server TEXT  Jellyseerr URL (or JELLYSEERR_SERVER env var)
+--jellyseerr-token TEXT   Jellyseerr API key (or JELLYSEERR_TOKEN env var)
+--output [text|json|csv|markdown]  Output format (default: text)
 --quiet                   Text mode: skip summary, show only stale list
 --help                    Show this message and exit
 ```
