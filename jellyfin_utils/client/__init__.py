@@ -12,12 +12,15 @@ from .models import LibraryItem, display_name, size_gb
 __all__ = [
     "LibraryItem",
     "build_headers",
+    "create_user",
     "display_name",
     "get_all_items",
+    "get_json",
     "get_users",
     "get_watch_counts_per_item",
     "get_watchers_per_item",
     "parse_last_played",
+    "post_empty",
     "size_gb",
 ]
 
@@ -32,6 +35,36 @@ def get_users(base_url: str, headers: dict[str, str]) -> list[dict]:
     r = requests.get(f"{base_url}/Users", headers=headers, timeout=15)
     r.raise_for_status()
     return orjson.loads(r.content)
+
+
+def create_user(
+    base_url: str,
+    headers: dict[str, str],
+    username: str,
+    password: str | None,
+) -> dict:
+    """Create a Jellyfin user and return the server's user record."""
+    response = requests.post(
+        f"{base_url}/Users/New",
+        headers=headers,
+        json={"Name": username, "Password": password},
+        timeout=15,
+    )
+    response.raise_for_status()
+    return orjson.loads(response.content)
+
+
+def get_json(base_url: str, headers: dict[str, str], path: str, *, params: dict | None = None) -> object:
+    """Fetch and decode a JSON API response."""
+    response = requests.get(f"{base_url}{path}", headers=headers, params=params, timeout=60)
+    response.raise_for_status()
+    return orjson.loads(response.content)
+
+
+def post_empty(base_url: str, headers: dict[str, str], path: str) -> None:
+    """Call an API endpoint that accepts no body and returns no content."""
+    response = requests.post(f"{base_url}{path}", headers=headers, timeout=60)
+    response.raise_for_status()
 
 
 def parse_last_played(item: dict) -> dt.datetime | None:
@@ -58,7 +91,7 @@ def get_all_items(
     include_types: str = "Movie,Series,Episode",
     fields: str = (
         "Path,MediaSources,SeriesName,SeasonName,IndexNumber,ParentIndexNumber,DateCreated,"
-        "ProviderIds,SeriesProviderIds"
+        "ProviderIds,SeriesProviderIds,ProductionYear"
     ),
 ) -> list[LibraryItem]:
     """Fetch library items as immutable ``LibraryItem`` instances."""

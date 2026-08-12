@@ -28,6 +28,7 @@ class LibraryItem:
     episode_index: int | None
     date_created: dt.datetime | None
     tmdb_id: int | None
+    production_year: int | None
 
     @classmethod
     def from_api(cls, raw: dict) -> LibraryItem | None:
@@ -54,6 +55,7 @@ class LibraryItem:
             episode_index=raw.get("IndexNumber"),
             date_created=date_created,
             tmdb_id=int(tmdb_id) if tmdb_id is not None else None,
+            production_year=raw.get("ProductionYear"),
         )
 
 

@@ -37,6 +37,13 @@ All commands are available through the unified `jellyfin` CLI:
 uv run jellyfin --help
 uv run jellyfin watched [OPTIONS]
 uv run jellyfin stale [OPTIONS]
+uv run jellyfin user add USERNAME [OPTIONS]
+uv run jellyfin reclaim [OPTIONS]
+uv run jellyfin duplicates [OPTIONS]
+uv run jellyfin health [OPTIONS]
+uv run jellyfin requests [OPTIONS]
+uv run jellyfin report [OPTIONS]
+uv run jellyfin server COMMAND [OPTIONS]
 ```
 
 Standalone entry points also work:
@@ -44,6 +51,80 @@ Standalone entry points also work:
 ```bash
 uv run jellyfin-watched [OPTIONS]
 uv run jellyfin-stale [OPTIONS]
+```
+
+### `jellyfin user add`
+
+Creates a Jellyfin user. By default, the command securely prompts for a password
+and confirmation; use `--password` only for non-interactive automation. Creating
+a passwordless account requires the explicit `--no-password` flag.
+
+```bash
+# Create a user and enter their password securely when prompted
+uv run jellyfin user add alice
+
+# Create a user from an automation script
+uv run jellyfin user add alice --password "$JELLYFIN_NEW_USER_PASSWORD"
+
+# Explicitly create a passwordless account
+uv run jellyfin user add kiosk --no-password
+```
+
+```
+--server TEXT   Jellyfin server URL (or JELLYFIN_SERVER env var)  [required]
+--token TEXT    API key with user-management permission (or JELLYFIN_TOKEN env var)  [required]
+--password TEXT User password; prompts securely when omitted
+--no-password   Create an account without a password
+--help          Show this message and exit
+```
+
+### Additional analysis commands
+
+All analysis commands return JSON for scripting and review.
+
+```bash
+# One cleanup-review queue, combining widely watched and stale items
+uv run jellyfin reclaim --min-age 90
+
+# Duplicates with the same Jellyfin media type and TMDb ID
+uv run jellyfin duplicates
+
+# Items without an on-disk path or known file size
+uv run jellyfin health
+
+# Reconcile Jellyseerr requests with media present in Jellyfin
+uv run jellyfin requests
+
+# Produce a library-size summary and save a snapshot
+uv run jellyfin report --snapshot .jellyfin-utils/report.json
+```
+
+### Server-management commands
+
+Management commands never mutate the server unless their explicit action flag
+is supplied. `cleanup` only runs installed Jellyfin scheduled tasks whose names
+or descriptions identify them as cleanup-oriented; it does not delete files
+itself.
+
+```bash
+# Server version, storage, failed scheduled tasks, and active sessions
+uv run jellyfin server status
+
+# Preview, then start a full library scan
+uv run jellyfin server scan
+uv run jellyfin server scan --apply
+
+# List task IDs, then start one built-in scheduled task
+uv run jellyfin server maintenance --list
+uv run jellyfin server maintenance --task TASK_ID --apply
+
+# List active sessions; stopping playback needs explicit confirmation
+uv run jellyfin server sessions
+uv run jellyfin server sessions --stop SESSION_ID --confirm
+
+# Preview cleanup tasks; require two flags to run them
+uv run jellyfin server cleanup
+uv run jellyfin server cleanup --apply --confirm
 ```
 
 ---
