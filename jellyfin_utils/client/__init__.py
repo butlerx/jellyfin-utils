@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import replace
+from typing import TYPE_CHECKING, Any
 
-import orjson
-import requests
+from jellyfin_utils.http import request_empty, request_json
 
 from .models import LibraryItem, display_name, size_gb
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Mapping
+
 __all__ = [
+    "PAGE_SIZE",
     "LibraryItem",
     "build_headers",
     "create_user",
@@ -21,11 +25,18 @@ __all__ = [
     "get_users",
     "get_watch_counts_per_item",
     "get_watchers_per_item",
+    "iter_items",
     "parse_last_played",
     "post_empty",
     "roll_up_series_sizes",
     "size_gb",
 ]
+
+SERVICE = "Jellyfin"
+
+# Jellyfin happily accepts a huge `Limit`, but a single unbounded response times out on large
+# libraries and hides truncation, so /Items is walked one page at a time instead.
+PAGE_SIZE = 1000
 
 
 def build_headers(token: str) -> dict[str, str]:
@@ -35,9 +46,7 @@ def build_headers(token: str) -> dict[str, str]:
 
 def get_users(base_url: str, headers: dict[str, str]) -> list[dict]:
     """Fetch all users from the Jellyfin server."""
-    r = requests.get(f"{base_url}/Users", headers=headers, timeout=15)
-    r.raise_for_status()
-    return orjson.loads(r.content)
+    return request_json("GET", f"{base_url}/Users", service=SERVICE, headers=headers, timeout=15)
 
 
 def create_user(
@@ -47,27 +56,54 @@ def create_user(
     password: str | None,
 ) -> dict:
     """Create a Jellyfin user and return the server's user record."""
-    response = requests.post(
+    return request_json(
+        "POST",
         f"{base_url}/Users/New",
+        service=SERVICE,
         headers=headers,
         json={"Name": username, "Password": password},
         timeout=15,
     )
-    response.raise_for_status()
-    return orjson.loads(response.content)
 
 
 def get_json(base_url: str, headers: dict[str, str], path: str, *, params: dict | None = None) -> object:
     """Fetch and decode a JSON API response."""
-    response = requests.get(f"{base_url}{path}", headers=headers, params=params, timeout=60)
-    response.raise_for_status()
-    return orjson.loads(response.content)
+    return request_json("GET", f"{base_url}{path}", service=SERVICE, headers=headers, params=params)
 
 
 def post_empty(base_url: str, headers: dict[str, str], path: str) -> None:
     """Call an API endpoint that accepts no body and returns no content."""
-    response = requests.post(f"{base_url}{path}", headers=headers, timeout=60)
-    response.raise_for_status()
+    request_empty("POST", f"{base_url}{path}", service=SERVICE, headers=headers)
+
+
+def iter_items(
+    base_url: str,
+    headers: dict[str, str],
+    params: Mapping[str, Any],
+) -> Iterator[dict]:
+    """
+    Yield every ``/Items`` record matching ``params``, one page at a time.
+
+    Stops when a page comes back empty or ``TotalRecordCount`` has been reached,
+    so a library larger than one page is never silently truncated.
+    """
+    start = 0
+    while True:
+        payload = request_json(
+            "GET",
+            f"{base_url}/Items",
+            service=SERVICE,
+            headers=headers,
+            params={**params, "Limit": PAGE_SIZE, "StartIndex": start},
+        )
+        page = payload.get("Items") or []
+        if not page:
+            return
+        yield from page
+        start += len(page)
+        total = payload.get("TotalRecordCount")
+        if total is not None and start >= total:
+            return
 
 
 def parse_last_played(item: dict) -> dt.datetime | None:
@@ -151,12 +187,12 @@ def get_all_items(
         "Recursive": "true",
         "EnableUserData": "false",
         "Fields": fields,
-        "Limit": 100000,
     }
-    r = requests.get(f"{base_url}/Items", headers=headers, params=params, timeout=60)
-    r.raise_for_status()
-    data = orjson.loads(r.content)
-    items = [item for raw in data.get("Items", []) if (item := LibraryItem.from_api(raw)) is not None]
+    items = [
+        item
+        for raw in iter_items(base_url, headers, params)
+        if (item := LibraryItem.from_api(raw)) is not None
+    ]
     if "Series" in include_types and "Episode" in include_types:
         return roll_up_series_sizes(drop_empty_series(items))
     return items
@@ -187,18 +223,9 @@ def get_watchers_per_item(
             "Recursive": "true",
             "Filters": "IsPlayed",
             "EnableUserData": "true",
-            "Limit": 100000,
         }
-        r = requests.get(
-            f"{base_url}/Items",
-            headers=headers,
-            params=params,
-            timeout=60,
-        )
-        r.raise_for_status()
-        data = orjson.loads(r.content)
 
-        for item in data.get("Items", []):
+        for item in iter_items(base_url, headers, params):
             item_id = item.get("Id")
             if item_id and _is_played_recently(item, cutoff):
                 watchers.setdefault(item_id, []).append(username)
