@@ -5,16 +5,12 @@ from __future__ import annotations
 from typing import Any, cast
 
 import click
-import orjson
 
 from jellyfin_utils.client import build_headers, get_json, post_empty
+from jellyfin_utils.output import OutputFormat, Report, Table, emit, output_option
 
 
-def _json(value: object) -> None:
-    click.echo(orjson.dumps(value, option=orjson.OPT_INDENT_2).decode())
-
-
-def _connection_options(command: Any) -> Any:  # noqa: ANN401
+def _connection_options(command: Any) -> Any:
     command = click.option("--token", envvar="JELLYFIN_TOKEN", required=True, help="Jellyfin API key.")(
         command
     )
@@ -52,9 +48,15 @@ def server() -> None:
     """Inspect and operate a Jellyfin server."""
 
 
+def _action_report(title: str, payload: dict, summary: tuple[tuple[str, object], ...]) -> Report:
+    """Build a report for a command that acts on the server rather than listing data."""
+    return Report(title=title, payload={**payload, "message": title}, summary=summary)
+
+
 @server.command()
 @_connection_options
-def status(server: str, token: str) -> None:
+@output_option
+def status(server: str, token: str, output_format: OutputFormat) -> None:
     """Show server, storage, task, and active-session status."""
     base_url = server.rstrip("/")
     headers = build_headers(token)
@@ -67,15 +69,35 @@ def status(server: str, token: str) -> None:
         for task in tasks
         if (task.get("LastExecutionResult") or {}).get("Status") == "Failed"
     ]
-    _json(
-        {
-            "server": info.get("ServerName"),
-            "version": info.get("Version"),
-            "pending_restart": info.get("HasPendingRestart"),
-            "libraries": len(storage.get("Libraries") or []),
-            "active_sessions": sum(bool(session.get("IsActive")) for session in sessions),
-            "failed_tasks": failed,
-        }
+    payload = {
+        "server": info.get("ServerName"),
+        "version": info.get("Version"),
+        "pending_restart": info.get("HasPendingRestart"),
+        "libraries": len(storage.get("Libraries") or []),
+        "active_sessions": sum(bool(session.get("IsActive")) for session in sessions),
+        "failed_tasks": failed,
+    }
+    emit(
+        Report(
+            title="Server status",
+            payload=payload,
+            summary=(
+                ("Server", payload["server"]),
+                ("Version", payload["version"]),
+                ("Pending restart", payload["pending_restart"]),
+                ("Libraries", payload["libraries"]),
+                ("Active sessions", payload["active_sessions"]),
+            ),
+            tables=(
+                Table(
+                    title="Scheduled tasks whose last run failed",
+                    columns=("Task",),
+                    rows=[(name,) for name in failed],
+                    empty="No failed tasks.",
+                ),
+            ),
+        ),
+        output_format,
     )
 
 
@@ -83,15 +105,31 @@ def status(server: str, token: str) -> None:
 @_connection_options
 @click.option("--library", help="Optional library ID to refresh; omit for all libraries.")
 @click.option("--apply", is_flag=True, help="Actually start the scan.")
-def scan(server: str, token: str, library: str | None, apply: bool) -> None:  # noqa: FBT001
+@output_option
+def scan(server: str, token: str, library: str | None, apply: bool, output_format: OutputFormat) -> None:
     """Preview or start a library scan."""
+    target = library or "all libraries"
     if not apply:
-        click.echo("Dry run: no scan started. Re-run with --apply to start it.")
+        emit(
+            _action_report(
+                "Dry run: no scan started. Re-run with --apply to start it.",
+                {"action": "scan", "library": library, "applied": False, "dry_run": True},
+                (("Action", "scan"), ("Target", target), ("Applied", False)),
+            ),
+            output_format,
+        )
         return
     base_url = server.rstrip("/")
     path = f"/Items/{library}/Refresh" if library else "/Library/Refresh"
     post_empty(base_url, build_headers(token), path)
-    click.echo("Library scan started.")
+    emit(
+        _action_report(
+            "Library scan started.",
+            {"action": "scan", "library": library, "applied": True, "dry_run": False},
+            (("Action", "scan"), ("Target", target), ("Applied", True)),
+        ),
+        output_format,
+    )
 
 
 @server.command()
@@ -99,39 +137,89 @@ def scan(server: str, token: str, library: str | None, apply: bool) -> None:  # 
 @click.option("--list", "list_tasks", is_flag=True, help="List runnable scheduled tasks.")
 @click.option("--task", help="Exact scheduled-task ID, name, or key to start.")
 @click.option("--apply", is_flag=True, help="Actually start the selected task.")
-def maintenance(server: str, token: str, list_tasks: bool, task: str | None, apply: bool) -> None:  # noqa: FBT001
+@output_option
+def maintenance(
+    server: str,
+    token: str,
+    list_tasks: bool,
+    task: str | None,
+    apply: bool,
+    output_format: OutputFormat,
+) -> None:
     """List or run Jellyfin's built-in scheduled maintenance tasks."""
     base_url = server.rstrip("/")
     tasks = _tasks(base_url, build_headers(token))
     if list_tasks or task is None:
-        _json(
+        listed = [
             {
-                "tasks": [
-                    {
-                        "id": item.get("Id"),
-                        "name": item.get("Name"),
-                        "key": item.get("Key"),
-                        "state": item.get("State"),
-                        "last_result": item.get("LastExecutionResult"),
-                    }
-                    for item in tasks
-                ]
+                "id": item.get("Id"),
+                "name": item.get("Name"),
+                "key": item.get("Key"),
+                "state": item.get("State"),
+                "last_result": item.get("LastExecutionResult"),
             }
+            for item in tasks
+        ]
+        emit(
+            Report(
+                title="Scheduled tasks",
+                payload={"tasks": listed},
+                summary=(("Tasks", len(listed)),),
+                tables=(
+                    Table(
+                        columns=("Name", "State", "Last result", "Key", "ID"),
+                        rows=[
+                            (
+                                item["name"],
+                                item["state"],
+                                (item["last_result"] or {}).get("Status"),
+                                item["key"],
+                                item["id"],
+                            )
+                            for item in listed
+                        ],
+                        empty="No scheduled tasks.",
+                    ),
+                ),
+            ),
+            output_format,
         )
         return
     selected = _matching_task(tasks, task)
+    name = selected.get("Name")
     if not apply:
-        click.echo(f'Dry run: would start "{selected.get("Name")}". Re-run with --apply.')
+        emit(
+            _action_report(
+                f'Dry run: would start "{name}". Re-run with --apply.',
+                {"action": "start_task", "task": name, "id": selected["Id"], "applied": False},
+                (("Action", "start_task"), ("Task", name), ("Applied", False)),
+            ),
+            output_format,
+        )
         return
     post_empty(base_url, build_headers(token), f"/ScheduledTasks/Running/{selected['Id']}")
-    click.echo(f'Started "{selected.get("Name")}".')
+    emit(
+        _action_report(
+            f'Started "{name}".',
+            {"action": "start_task", "task": name, "id": selected["Id"], "applied": True},
+            (("Action", "start_task"), ("Task", name), ("Applied", True)),
+        ),
+        output_format,
+    )
 
 
 @server.command()
 @_connection_options
 @click.option("--stop", "session_id", help="Session ID to stop.")
 @click.option("--confirm", is_flag=True, help="Required with --stop.")
-def sessions(server: str, token: str, session_id: str | None, confirm: bool) -> None:  # noqa: FBT001
+@output_option
+def sessions(
+    server: str,
+    token: str,
+    session_id: str | None,
+    confirm: bool,
+    output_format: OutputFormat,
+) -> None:
     """List sessions or stop a selected active playback session."""
     base_url = server.rstrip("/")
     headers = build_headers(token)
@@ -140,23 +228,54 @@ def sessions(server: str, token: str, session_id: str | None, confirm: bool) -> 
             message = "Stopping a session requires --confirm."
             raise click.UsageError(message)
         post_empty(base_url, headers, f"/Sessions/{session_id}/Playing/Stop")
-        click.echo(f"Stop command sent to session {session_id}.")
+        emit(
+            _action_report(
+                f"Stop command sent to session {session_id}.",
+                {"action": "stop_session", "session": session_id, "applied": True},
+                (("Action", "stop_session"), ("Session", session_id), ("Applied", True)),
+            ),
+            output_format,
+        )
         return
     active = cast("list[dict]", get_json(base_url, headers, "/Sessions", params={"activeWithinSeconds": 300}))
-    _json(
+    listed = [
         {
-            "sessions": [
-                {
-                    "id": item.get("Id"),
-                    "user": item.get("UserName"),
-                    "client": item.get("Client"),
-                    "device": item.get("DeviceName"),
-                    "playing": (item.get("NowPlayingItem") or {}).get("Name"),
-                    "transcoding": bool(item.get("TranscodingInfo")),
-                }
-                for item in active
-            ]
+            "id": item.get("Id"),
+            "user": item.get("UserName"),
+            "client": item.get("Client"),
+            "device": item.get("DeviceName"),
+            "playing": (item.get("NowPlayingItem") or {}).get("Name"),
+            "transcoding": bool(item.get("TranscodingInfo")),
         }
+        for item in active
+    ]
+    emit(
+        Report(
+            title="Active sessions",
+            payload={"sessions": listed},
+            summary=(
+                ("Sessions", len(listed)),
+                ("Transcoding", sum(bool(item["transcoding"]) for item in listed)),
+            ),
+            tables=(
+                Table(
+                    columns=("User", "Client", "Device", "Playing", "Transcoding", "ID"),
+                    rows=[
+                        (
+                            item["user"],
+                            item["client"],
+                            item["device"],
+                            item["playing"],
+                            item["transcoding"],
+                            item["id"],
+                        )
+                        for item in listed
+                    ],
+                    empty="No sessions active in the last 5 minutes.",
+                ),
+            ),
+        ),
+        output_format,
     )
 
 
@@ -164,7 +283,8 @@ def sessions(server: str, token: str, session_id: str | None, confirm: bool) -> 
 @_connection_options
 @click.option("--apply", is_flag=True, help="Actually start selected maintenance tasks.")
 @click.option("--confirm", is_flag=True, help="Required with --apply.")
-def cleanup(server: str, token: str, apply: bool, confirm: bool) -> None:  # noqa: FBT001
+@output_option
+def cleanup(server: str, token: str, apply: bool, confirm: bool, output_format: OutputFormat) -> None:
     """Preview or run installed cleanup-oriented scheduled tasks."""
     base_url = server.rstrip("/")
     headers = build_headers(token)
@@ -176,12 +296,23 @@ def cleanup(server: str, token: str, apply: bool, confirm: bool) -> None:  # noq
             word in f"{task.get('Name', '')} {task.get('Description', '')}".casefold() for word in keywords
         )
     ]
+    listed = [{"id": task.get("Id"), "name": task.get("Name")} for task in candidates]
     if not apply:
-        _json(
-            {
-                "dry_run": True,
-                "tasks": [{"id": task.get("Id"), "name": task.get("Name")} for task in candidates],
-            }
+        emit(
+            Report(
+                title="Cleanup tasks (dry run)",
+                payload={"dry_run": True, "tasks": listed},
+                summary=(("Matching tasks", len(listed)), ("Applied", False)),
+                tables=(
+                    Table(
+                        columns=("Name", "ID"),
+                        rows=[(task["name"], task["id"]) for task in listed],
+                        empty="No cleanup-oriented tasks installed.",
+                    ),
+                ),
+                notes=("Re-run with --apply --confirm to start these tasks.",),
+            ),
+            output_format,
         )
         return
     if not confirm:
@@ -189,4 +320,18 @@ def cleanup(server: str, token: str, apply: bool, confirm: bool) -> None:  # noq
         raise click.UsageError(message)
     for task in candidates:
         post_empty(base_url, headers, f"/ScheduledTasks/Running/{task['Id']}")
-    click.echo(f"Started {len(candidates)} cleanup task(s).")
+    emit(
+        Report(
+            title=f"Started {len(candidates)} cleanup task(s).",
+            payload={"dry_run": False, "tasks": listed, "started": len(listed), "message": "Started tasks."},
+            summary=(("Started", len(listed)), ("Applied", True)),
+            tables=(
+                Table(
+                    columns=("Name", "ID"),
+                    rows=[(task["name"], task["id"]) for task in listed],
+                    empty="No cleanup-oriented tasks installed.",
+                ),
+            ),
+        ),
+        output_format,
+    )

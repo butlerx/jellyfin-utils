@@ -35,6 +35,37 @@ def _format_item_detail(s: StaleItem) -> str:
     return "\n".join(lines)
 
 
+def _summary_lines(
+    stale_items: list[StaleItem],
+    total_active_users: int,
+    *,
+    total_users: int,
+    ignore_usernames: set[str],
+    max_watchers: int,
+    total_items: int,
+    min_age_days: int | None,
+    jellyseerr_enabled: bool,
+) -> list[str]:
+    """Build the header block shown above the stale list."""
+    lines = [f"Total users: {total_users}"]
+    if ignore_usernames:
+        lines.append(f"Ignoring users: {', '.join(sorted(ignore_usernames))}")
+    lines.append(f"Active users analyzed: {total_active_users}")
+    lines.append(f"Stale threshold: watched by <= {max_watchers} users")
+    lines.append(f"Total library items scanned: {total_items}")
+    if min_age_days is not None:
+        lines.append(f"Minimum age: {min_age_days} days (newer items excluded)")
+    if jellyseerr_enabled:
+        lines.append("PRIORITY = requested in Jellyseerr and watched by its requester")
+    lines.append(f"\nStale items (watched by <={max_watchers} users): {len(stale_items)}")
+    total_size = sum(size_gb(s.item.size) for s in stale_items if not s.item.size_is_rollup)
+    lines.append(f"Total size of stale content: {total_size:.2f} GB")
+    if any(s.item.size_is_rollup for s in stale_items):
+        lines.append("(Series sizes total their episodes and are left out of the figure above.)")
+    lines.append("")
+    return lines
+
+
 def render_text(
     stale_items: list[StaleItem],
     grouped: dict[str, list[StaleItem]],
@@ -52,20 +83,18 @@ def render_text(
     lines: list[str] = []
 
     if not quiet:
-        lines.append(f"Total users: {total_users}")
-        if ignore_usernames:
-            lines.append(f"Ignoring users: {', '.join(sorted(ignore_usernames))}")
-        lines.append(f"Active users analyzed: {total_active_users}")
-        lines.append(f"Stale threshold: watched by <= {max_watchers} users")
-        lines.append(f"Total library items scanned: {total_items}")
-        if min_age_days is not None:
-            lines.append(f"Minimum age: {min_age_days} days (newer items excluded)")
-        if jellyseerr_enabled:
-            lines.append("PRIORITY = requested in Jellyseerr and watched by its requester")
-        lines.append(f"\nStale items (watched by <={max_watchers} users): {len(stale_items)}")
-        total_size = sum(size_gb(s.item.size) for s in stale_items)
-        lines.append(f"Total size of stale content: {total_size:.2f} GB")
-        lines.append("")
+        lines.extend(
+            _summary_lines(
+                stale_items,
+                total_active_users,
+                total_users=total_users,
+                ignore_usernames=ignore_usernames,
+                max_watchers=max_watchers,
+                total_items=total_items,
+                min_age_days=min_age_days,
+                jellyseerr_enabled=jellyseerr_enabled,
+            )
+        )
 
     for media_type in MEDIA_TYPE_ORDER:
         items_of_type = grouped[media_type]

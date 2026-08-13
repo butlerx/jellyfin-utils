@@ -24,11 +24,14 @@ class LibraryItem:
     path: str
     size: int
     series_name: str | None
+    series_id: str | None
     parent_index: int | None
     episode_index: int | None
     date_created: dt.datetime | None
     tmdb_id: int | None
     production_year: int | None
+    size_is_rollup: bool = False
+    """``True`` when ``size`` is the total of child items rather than this item's own files."""
 
     @classmethod
     def from_api(cls, raw: dict) -> LibraryItem | None:
@@ -51,6 +54,7 @@ class LibraryItem:
             path=raw.get("Path", ""),
             size=_extract_size(raw),
             series_name=raw.get("SeriesName"),
+            series_id=raw.get("SeriesId"),
             parent_index=raw.get("ParentIndexNumber"),
             episode_index=raw.get("IndexNumber"),
             date_created=date_created,

@@ -14,6 +14,7 @@ from jellyfin_utils.client import (
     get_watchers_per_item,
 )
 from jellyfin_utils.jellyseerr import get_requesters_by_tmdb_id
+from jellyfin_utils.output import OutputFormat, output_option
 
 from .models import StaleItem
 from .render import MEDIA_TYPE_ORDER, render_csv, render_json, render_markdown, render_text
@@ -117,14 +118,7 @@ def group_by_type(stale_items: list[StaleItem]) -> dict[str, list[StaleItem]]:
     envvar="JELLYSEERR_TOKEN",
     help="Jellyseerr API key; required with --jellyseerr-server.",
 )
-@click.option(
-    "--output",
-    "output_format",
-    type=click.Choice(["text", "json", "csv", "markdown"], case_sensitive=False),
-    default="text",
-    show_default=True,
-    help="Output format.",
-)
+@output_option
 @click.option(
     "--quiet",
     is_flag=True,
@@ -138,8 +132,8 @@ def main(
     max_watchers: int,
     jellyseerr_server: str | None,
     jellyseerr_token: str | None,
-    output_format: str,
-    quiet: bool,  # noqa: FBT001
+    output_format: OutputFormat,
+    quiet: bool,
 ) -> None:
     """Find unwatched or rarely-watched Jellyfin content."""
     if bool(jellyseerr_server) != bool(jellyseerr_token):
@@ -168,7 +162,7 @@ def main(
     grouped = group_by_type(stale_items)
 
     match output_format:
-        case "json":
+        case OutputFormat.JSON:
             click.echo(
                 render_json(
                     stale_items,
@@ -183,9 +177,9 @@ def main(
                     jellyseerr_enabled=requesters_by_tmdb_id is not None,
                 )
             )
-        case "csv":
+        case OutputFormat.CSV:
             click.echo(render_csv(stale_items), nl=False)
-        case "markdown":
+        case OutputFormat.MARKDOWN:
             click.echo(render_markdown(stale_items, active_user_count))
         case _:
             click.echo(
@@ -202,7 +196,3 @@ def main(
                     jellyseerr_enabled=requesters_by_tmdb_id is not None,
                 )
             )
-
-
-if __name__ == "__main__":
-    main()

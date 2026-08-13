@@ -10,17 +10,24 @@ from typing import Any
 import click
 import orjson
 
-from jellyfin_utils.client import build_headers, get_all_items, get_users, get_watchers_per_item, size_gb
-from jellyfin_utils.jellyseerr import get_requests
+from jellyfin_utils.client import (
+    LibraryItem,
+    build_headers,
+    display_name,
+    get_all_items,
+    get_users,
+    get_watchers_per_item,
+    size_gb,
+)
+from jellyfin_utils.jellyseerr import get_requesters_by_tmdb_id, get_requests
+from jellyfin_utils.output import OutputFormat, Report, Table, emit, output_option
 from jellyfin_utils.stale.cli import find_stale
 from jellyfin_utils.watched.cli import find_candidates
 
-
-def _json(value: object) -> None:
-    click.echo(orjson.dumps(value, option=orjson.OPT_INDENT_2).decode())
+from .render import render_csv, render_json, render_markdown, render_text
 
 
-def _connection_options(command: Any) -> Any:  # noqa: ANN401
+def _connection_options(command: Any) -> Any:
     command = click.option("--token", envvar="JELLYFIN_TOKEN", required=True, help="Jellyfin API key.")(
         command
     )
@@ -34,8 +41,38 @@ def _connection_options(command: Any) -> Any:  # noqa: ANN401
 @click.option("--ignore-user", multiple=True, help="Username to exclude (repeatable).")
 @click.option("--threshold", default=80, show_default=True, help="Watched percentage required.")
 @click.option("--min-age", default=90, show_default=True, help="Minimum stale-item age in days.")
-def reclaim(server: str, token: str, ignore_user: tuple[str, ...], threshold: int, min_age: int) -> None:
+@click.option(
+    "--jellyseerr-server",
+    envvar="JELLYSEERR_SERVER",
+    help="Jellyseerr server base URL; enables requester-watch prioritization.",
+)
+@click.option(
+    "--jellyseerr-token",
+    envvar="JELLYSEERR_TOKEN",
+    help="Jellyseerr API key; required with --jellyseerr-server.",
+)
+@output_option
+@click.option(
+    "--quiet",
+    is_flag=True,
+    help="In text mode, only print the list of candidates, no summary.",
+)
+def reclaim(
+    server: str,
+    token: str,
+    ignore_user: tuple[str, ...],
+    threshold: int,
+    min_age: int,
+    jellyseerr_server: str | None,
+    jellyseerr_token: str | None,
+    output_format: OutputFormat,
+    quiet: bool,
+) -> None:
     """Rank watched and stale content for cleanup review."""
+    if bool(jellyseerr_server) != bool(jellyseerr_token):
+        message = "--jellyseerr-server and --jellyseerr-token must be used together."
+        raise click.UsageError(message)
+
     headers = build_headers(token)
     base_url = server.rstrip("/")
     users = get_users(base_url, headers)
@@ -43,85 +80,168 @@ def reclaim(server: str, token: str, ignore_user: tuple[str, ...], threshold: in
     watchers = get_watchers_per_item(base_url, headers, users, ignored, max_age_days=None)
     active = sum(user.get("Name") not in ignored for user in users)
     items = get_all_items(base_url, headers)
-    candidates = find_candidates(items, watchers, active, threshold)
-    stale = find_stale(items, watchers, active, 0, min_age, dt.datetime.now(dt.UTC))
+    requesters_by_tmdb_id = (
+        get_requesters_by_tmdb_id(jellyseerr_server.rstrip("/"), jellyseerr_token)
+        if jellyseerr_server and jellyseerr_token
+        else None
+    )
+    candidates = find_candidates(items, watchers, active, threshold, requesters_by_tmdb_id)
+    stale = find_stale(items, watchers, active, 0, min_age, dt.datetime.now(dt.UTC), requesters_by_tmdb_id)
     merged: dict[str, dict] = {}
     for candidate in candidates:
         merged[candidate.item.item_id] = {
             "reason": "widely_watched",
-            "item": candidate.item.name,
+            "item": display_name(candidate.item),
+            "series": candidate.item.series_name,
             "id": candidate.item.item_id,
+            "type": candidate.item.item_type,
+            "path": candidate.item.path,
             "size_gib": round(size_gb(candidate.item.size), 2),
+            "size_is_rollup": candidate.item.size_is_rollup,
             "watchers": candidate.watch_count,
+            "requested_by": list(candidate.requested_by),
+            "watched_by_requester": list(candidate.watched_by_requester),
+            "requester_watched": candidate.requester_watched,
         }
     for item in stale:
         entry = merged.setdefault(
             item.item.item_id,
             {
                 "reason": "stale",
-                "item": item.item.name,
+                "item": display_name(item.item),
+                "series": item.item.series_name,
                 "id": item.item.item_id,
+                "type": item.item.item_type,
+                "path": item.item.path,
                 "size_gib": round(size_gb(item.item.size), 2),
+                "size_is_rollup": item.item.size_is_rollup,
                 "watchers": item.watch_count,
+                "requested_by": list(item.requested_by),
+                "watched_by_requester": list(item.watched_by_requester),
+                "requester_watched": item.requester_watched,
             },
         )
         if entry["reason"] == "widely_watched":
             entry["reason"] = "widely_watched_and_stale"
-    results = sorted(merged.values(), key=lambda entry: -float(entry["size_gib"]))
-    _json(
-        {
-            "candidates": results,
-            "count": len(results),
-            "estimated_reclaimable_gib": round(sum(float(entry["size_gib"]) for entry in results), 2),
-        }
+    results = sorted(
+        merged.values(), key=lambda entry: (not entry["requester_watched"], -float(entry["size_gib"]))
+    )
+    jellyseerr_enabled = requesters_by_tmdb_id is not None
+
+    match output_format:
+        case OutputFormat.JSON:
+            click.echo(render_json(results, jellyseerr_enabled=jellyseerr_enabled))
+        case OutputFormat.CSV:
+            click.echo(render_csv(results), nl=False)
+        case OutputFormat.MARKDOWN:
+            click.echo(render_markdown(results))
+        case _:
+            click.echo(render_text(results, jellyseerr_enabled=jellyseerr_enabled, quiet=quiet))
+
+
+@click.command()
+@_connection_options
+@output_option
+def duplicates(server: str, token: str, output_format: OutputFormat) -> None:
+    """Find on-disk items with the same TMDb identifier."""
+    items = get_all_items(server.rstrip("/"), build_headers(token))
+    grouped: dict[tuple[str, int], list[LibraryItem]] = defaultdict(list)
+    for item in items:
+        if item.path and item.tmdb_id is not None:
+            grouped[(item.item_type, item.tmdb_id)].append(item)
+    duplicate_groups = [(key, group) for key, group in grouped.items() if len(group) > 1]
+    emit(
+        Report(
+            title="Duplicate items",
+            payload={
+                "duplicate_groups": [
+                    {
+                        "type": kind,
+                        "tmdb_id": tmdb_id,
+                        "items": [
+                            {
+                                "id": item.item_id,
+                                "name": item.name,
+                                "year": item.production_year,
+                                "path": item.path,
+                                "size_gib": round(size_gb(item.size), 2),
+                            }
+                            for item in group
+                        ],
+                    }
+                    for (kind, tmdb_id), group in duplicate_groups
+                ],
+                "count": len(duplicate_groups),
+            },
+            summary=(
+                ("Items scanned", len(items)),
+                ("Duplicate groups", len(duplicate_groups)),
+                ("Copies on disk", sum(len(group) for _, group in duplicate_groups)),
+            ),
+            tables=(
+                Table(
+                    columns=("Type", "TMDb ID", "Title", "Year", "Size (GiB)", "ID", "Path"),
+                    align="lrlrrll",
+                    rows=[
+                        (
+                            kind,
+                            tmdb_id,
+                            item.name,
+                            item.production_year,
+                            f"{size_gb(item.size):.2f}",
+                            item.item_id,
+                            item.path,
+                        )
+                        for (kind, tmdb_id), group in duplicate_groups
+                        for item in group
+                    ],
+                    empty="No duplicates found.",
+                ),
+            ),
+        ),
+        output_format,
     )
 
 
 @click.command()
 @_connection_options
-def duplicates(server: str, token: str) -> None:
-    """Find on-disk items with the same TMDb identifier."""
-    items = get_all_items(server.rstrip("/"), build_headers(token))
-    grouped: dict[tuple[str, int], list] = defaultdict(list)
-    for item in items:
-        if item.path and item.tmdb_id is not None:
-            grouped[(item.item_type, item.tmdb_id)].append(item)
-    groups = [
-        {
-            "type": kind,
-            "tmdb_id": tmdb_id,
-            "items": [
-                {
-                    "id": item.item_id,
-                    "name": item.name,
-                    "year": item.production_year,
-                    "path": item.path,
-                    "size_gib": round(size_gb(item.size), 2),
-                }
-                for item in group
-            ],
-        }
-        for (kind, tmdb_id), group in grouped.items()
-        if len(group) > 1
-    ]
-    _json({"duplicate_groups": groups, "count": len(groups)})
-
-
-@click.command()
-@_connection_options
-def health(server: str, token: str) -> None:
+@output_option
+def health(server: str, token: str, output_format: OutputFormat) -> None:
     """Report library records that cannot be used for storage analysis."""
     items = get_all_items(server.rstrip("/"), build_headers(token))
     missing_path = [item for item in items if not item.path]
     no_size = [item for item in items if item.path and item.size == 0]
-    _json(
-        {
-            "items_scanned": len(items),
-            "missing_path": [
-                {"id": item.item_id, "name": item.name, "type": item.item_type} for item in missing_path
-            ],
-            "zero_size": [{"id": item.item_id, "name": item.name, "path": item.path} for item in no_size],
-        }
+    emit(
+        Report(
+            title="Library health",
+            payload={
+                "items_scanned": len(items),
+                "missing_path": [
+                    {"id": item.item_id, "name": item.name, "type": item.item_type} for item in missing_path
+                ],
+                "zero_size": [{"id": item.item_id, "name": item.name, "path": item.path} for item in no_size],
+            },
+            summary=(
+                ("Items scanned", len(items)),
+                ("Missing path", len(missing_path)),
+                ("Zero size", len(no_size)),
+            ),
+            tables=(
+                Table(
+                    title="Items with no on-disk path",
+                    columns=("Type", "Title", "ID"),
+                    rows=[(item.item_type, item.name, item.item_id) for item in missing_path],
+                    empty="Every item has a path.",
+                ),
+                Table(
+                    title="On-disk items reporting zero bytes",
+                    columns=("Title", "ID", "Path"),
+                    rows=[(item.name, item.item_id, item.path) for item in no_size],
+                    empty="Every on-disk item reports a size.",
+                ),
+            ),
+        ),
+        output_format,
     )
 
 
@@ -129,19 +249,52 @@ def health(server: str, token: str) -> None:
 @_connection_options
 @click.option("--jellyseerr-server", envvar="JELLYSEERR_SERVER", required=True, help="Jellyseerr server URL.")
 @click.option("--jellyseerr-token", envvar="JELLYSEERR_TOKEN", required=True, help="Jellyseerr API key.")
-def requests(server: str, token: str, jellyseerr_server: str, jellyseerr_token: str) -> None:
+@output_option
+def requests(
+    server: str,
+    token: str,
+    jellyseerr_server: str,
+    jellyseerr_token: str,
+    output_format: OutputFormat,
+) -> None:
     """Reconcile Jellyseerr requests with media currently in Jellyfin."""
     items = get_all_items(server.rstrip("/"), build_headers(token))
     available = {item.tmdb_id for item in items if item.tmdb_id is not None and item.path}
-    results = get_requests(jellyseerr_server.rstrip("/"), jellyseerr_token)
-    _json(
-        {
-            "requests": [
-                {**request, "available_in_jellyfin": request.get("tmdb_id") in available}
-                for request in results
-            ],
-            "count": len(results),
-        }
+    results = [
+        {**request, "available_in_jellyfin": request.get("tmdb_id") in available}
+        for request in get_requests(jellyseerr_server.rstrip("/"), jellyseerr_token)
+    ]
+    landed = sum(bool(request["available_in_jellyfin"]) for request in results)
+    emit(
+        Report(
+            title="Jellyseerr requests vs. library",
+            payload={"requests": results, "count": len(results)},
+            summary=(
+                ("Requests", len(results)),
+                ("Available in Jellyfin", landed),
+                ("Missing from Jellyfin", len(results) - landed),
+            ),
+            tables=(
+                Table(
+                    columns=("ID", "Status", "Requested by", "TMDb ID", "Media type", "In Jellyfin"),
+                    align="rrlrll",
+                    rows=[
+                        (
+                            request["id"],
+                            request["status"],
+                            request["requested_by"],
+                            request["tmdb_id"],
+                            request["media_type"],
+                            request["available_in_jellyfin"],
+                        )
+                        for request in results
+                    ],
+                    empty="No requests found.",
+                ),
+            ),
+            notes=("Status is Jellyseerr's own request-status code, passed through unchanged.",),
+        ),
+        output_format,
     )
 
 
@@ -150,7 +303,8 @@ def requests(server: str, token: str, jellyseerr_server: str, jellyseerr_token: 
 @click.option(
     "--snapshot", type=click.Path(path_type=Path), help="Optional JSON file to write with this report."
 )
-def report(server: str, token: str, snapshot: Path | None) -> None:
+@output_option
+def report(server: str, token: str, snapshot: Path | None, output_format: OutputFormat) -> None:
     """Summarize library size and item counts, optionally saving a snapshot."""
     items = get_all_items(server.rstrip("/"), build_headers(token))
     by_type: dict[str, dict[str, int]] = defaultdict(lambda: {"items": 0, "bytes": 0})
@@ -159,10 +313,31 @@ def report(server: str, token: str, snapshot: Path | None) -> None:
         by_type[item.item_type]["bytes"] += item.size
     payload = {
         "items": len(items),
-        "total_gib": round(sum(item.size for item in items) / 1024**3, 2),
+        # Series sizes total their episodes, which are counted individually.
+        "total_gib": round(sum(item.size for item in items if not item.size_is_rollup) / 1024**3, 2),
         "by_type": by_type,
     }
     if snapshot is not None:
         snapshot.parent.mkdir(parents=True, exist_ok=True)
         snapshot.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
-    _json(payload)
+    emit(
+        Report(
+            title="Library report",
+            payload=payload,
+            summary=(("Items", payload["items"]), ("Total GiB", f"{payload['total_gib']:.2f}")),
+            tables=(
+                Table(
+                    title="By media type",
+                    columns=("Type", "Items", "Bytes", "Size (GiB)"),
+                    align="lrrr",
+                    rows=[
+                        (kind, counts["items"], counts["bytes"], f"{counts['bytes'] / 1024**3:.2f}")
+                        for kind, counts in sorted(by_type.items())
+                    ],
+                    empty="Library is empty.",
+                ),
+            ),
+            notes=("Series repeat the bytes already counted under Episode; Total GiB counts them once.",),
+        ),
+        output_format,
+    )

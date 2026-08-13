@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from jellyfin_utils.client import build_headers, create_user, get_users
+from jellyfin_utils.output import OutputFormat, Report, emit, output_option
 
 
 @click.group("user")
@@ -37,12 +38,14 @@ def user() -> None:
     is_flag=True,
     help="Create an account without a password instead of prompting.",
 )
+@output_option
 def add(
     username: str,
     server: str,
     token: str,
     password: str | None,
-    no_password: bool,  # noqa: FBT001
+    no_password: bool,
+    output_format: OutputFormat,
 ) -> None:
     """Create a Jellyfin user."""
     username = username.strip()
@@ -64,4 +67,23 @@ def add(
 
     created_user = create_user(base_url, headers, username, password)
     user_id = created_user.get("Id", "unknown")
-    click.echo(f'Created user "{created_user.get("Name", username)}" (ID: {user_id}).')
+    created_name = created_user.get("Name", username)
+    title = f'Created user "{created_name}" (ID: {user_id}).'
+    emit(
+        Report(
+            title=title,
+            payload={
+                "created": True,
+                "username": created_name,
+                "id": user_id,
+                "password_set": password is not None,
+                "message": title,
+            },
+            summary=(
+                ("Username", created_name),
+                ("ID", user_id),
+                ("Password set", password is not None),
+            ),
+        ),
+        output_format,
+    )

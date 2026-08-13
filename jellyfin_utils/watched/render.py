@@ -36,6 +36,37 @@ def _format_item_detail(c: Candidate) -> str:
     return "\n".join(lines)
 
 
+def _summary_lines(
+    candidates: list[Candidate],
+    total_active_users: int,
+    *,
+    total_users: int,
+    ignore_usernames: set[str],
+    threshold: int,
+    total_items: int,
+    max_age_days: int | None,
+    jellyseerr_enabled: bool,
+) -> list[str]:
+    """Build the header block shown above the candidate list."""
+    lines = [f"Total users: {total_users}"]
+    if ignore_usernames:
+        lines.append(f"Ignoring users: {', '.join(sorted(ignore_usernames))}")
+    lines.append(f"Active users analyzed: {total_active_users}")
+    lines.append(f"Watch threshold: {threshold}% of users")
+    lines.append(f"Total library items scanned: {total_items}")
+    if max_age_days is not None:
+        lines.append(f"(Plays older than {max_age_days} days are ignored)")
+    if jellyseerr_enabled:
+        lines.append("PRIORITY = requested in Jellyseerr and watched by its requester")
+    lines.append(f"\nCandidate items (watched by >={threshold}% of users): {len(candidates)}")
+    total_size = sum(size_gb(c.item.size) for c in candidates if not c.item.size_is_rollup)
+    lines.append(f"Total size of candidates: {total_size:.2f} GB")
+    if any(c.item.size_is_rollup for c in candidates):
+        lines.append("(Series sizes total their episodes and are left out of the figure above.)")
+    lines.append("")
+    return lines
+
+
 def render_text(
     candidates: list[Candidate],
     grouped: dict[str, list[Candidate]],
@@ -53,20 +84,18 @@ def render_text(
     lines: list[str] = []
 
     if not quiet:
-        lines.append(f"Total users: {total_users}")
-        if ignore_usernames:
-            lines.append(f"Ignoring users: {', '.join(sorted(ignore_usernames))}")
-        lines.append(f"Active users analyzed: {total_active_users}")
-        lines.append(f"Watch threshold: {threshold}% of users")
-        lines.append(f"Total library items scanned: {total_items}")
-        if max_age_days is not None:
-            lines.append(f"(Plays older than {max_age_days} days are ignored)")
-        if jellyseerr_enabled:
-            lines.append("PRIORITY = requested in Jellyseerr and watched by its requester")
-        lines.append(f"\nCandidate items (watched by >={threshold}% of users): {len(candidates)}")
-        total_size = sum(size_gb(c.item.size) for c in candidates)
-        lines.append(f"Total size of candidates: {total_size:.2f} GB")
-        lines.append("")
+        lines.extend(
+            _summary_lines(
+                candidates,
+                total_active_users,
+                total_users=total_users,
+                ignore_usernames=ignore_usernames,
+                threshold=threshold,
+                total_items=total_items,
+                max_age_days=max_age_days,
+                jellyseerr_enabled=jellyseerr_enabled,
+            )
+        )
 
     for media_type in MEDIA_TYPE_ORDER:
         items_of_type = grouped[media_type]
