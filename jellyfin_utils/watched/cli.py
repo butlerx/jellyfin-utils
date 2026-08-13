@@ -6,7 +6,16 @@ import click
 
 from jellyfin_utils.client import LibraryItem, build_headers, get_all_items, get_users, get_watchers_per_item
 from jellyfin_utils.jellyseerr import get_requesters_by_tmdb_id
-from jellyfin_utils.output import OutputFormat, output_option
+from jellyfin_utils.options import (
+    connection_options,
+    ignore_user_option,
+    jellyseerr_options,
+    output_option,
+    quiet_option,
+    require_jellyseerr_pair,
+    threshold_option,
+)
+from jellyfin_utils.output import OutputFormat
 
 from .models import Candidate
 from .render import MEDIA_TYPE_ORDER, render_csv, render_json, render_markdown, render_text
@@ -72,55 +81,16 @@ def group_by_type(candidates: list[Candidate]) -> dict[str, list[Candidate]]:
     return grouped
 
 
-@click.command("jellyfin-watched")
-@click.option(
-    "--server",
-    envvar="JELLYFIN_SERVER",
-    required=True,
-    help="Jellyfin server base URL (e.g. http://jellyfin.lan:8096).",
-)
-@click.option(
-    "--token",
-    envvar="JELLYFIN_TOKEN",
-    required=True,
-    help="Jellyfin API key.",
-)
-@click.option(
-    "--ignore-user",
-    multiple=True,
-    help="Username to ignore (can be passed multiple times).",
-)
-@click.option(
-    "--days",
-    type=int,
-    default=None,
-    help="Only consider plays within the last N days as 'watched'.",
-)
-@click.option(
-    "--threshold",
-    type=int,
-    default=80,
-    show_default=True,
-    help="Percentage of users who must have watched an item for it to be a candidate.",
-)
-@click.option(
-    "--jellyseerr-server",
-    envvar="JELLYSEERR_SERVER",
-    help="Jellyseerr server base URL; enables requester-watch prioritization.",
-)
-@click.option(
-    "--jellyseerr-token",
-    envvar="JELLYSEERR_TOKEN",
-    help="Jellyseerr API key; required with --jellyseerr-server.",
-)
+@click.command("watched")
+@connection_options
+@jellyseerr_options
+@ignore_user_option
+@click.option("--days", type=int, default=None, help="Only count plays within the last N days as watched.")
+@threshold_option
 @output_option
-@click.option(
-    "--quiet",
-    is_flag=True,
-    help="In text mode, only print the list of candidate items, no summary.",
-)
+@quiet_option
 def main(
-    server: str,
+    base_url: str,
     token: str,
     ignore_user: tuple[str, ...],
     days: int | None,
@@ -131,11 +101,8 @@ def main(
     quiet: bool,
 ) -> None:
     """Analyze Jellyfin usage and list media safe to delete."""
-    if bool(jellyseerr_server) != bool(jellyseerr_token):
-        message = "--jellyseerr-server and --jellyseerr-token must be used together."
-        raise click.UsageError(message)
+    require_jellyseerr_pair(jellyseerr_server, jellyseerr_token)
 
-    base_url = server.rstrip("/")
     headers = build_headers(token)
 
     users = get_users(base_url, headers)
@@ -152,7 +119,7 @@ def main(
     active_user_count = sum(1 for u in users if u.get("Name") not in ignore_usernames)
     all_items = get_all_items(base_url, headers)
     requesters_by_tmdb_id = (
-        get_requesters_by_tmdb_id(jellyseerr_server.rstrip("/"), jellyseerr_token)
+        get_requesters_by_tmdb_id(jellyseerr_server, jellyseerr_token)
         if jellyseerr_server and jellyseerr_token
         else None
     )

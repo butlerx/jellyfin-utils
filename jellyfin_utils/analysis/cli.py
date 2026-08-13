@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime as dt
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
 import click
 import orjson
@@ -20,45 +19,32 @@ from jellyfin_utils.client import (
     size_gb,
 )
 from jellyfin_utils.jellyseerr import get_requesters_by_tmdb_id, get_requests
-from jellyfin_utils.output import OutputFormat, Report, Table, emit, output_option
+from jellyfin_utils.options import (
+    connection_options,
+    ignore_user_option,
+    jellyseerr_options,
+    output_option,
+    quiet_option,
+    require_jellyseerr_pair,
+    threshold_option,
+)
+from jellyfin_utils.output import OutputFormat, Report, Table, emit
 from jellyfin_utils.stale.cli import find_stale
 from jellyfin_utils.watched.cli import find_candidates
 
 from .render import render_csv, render_json, render_markdown, render_text
 
 
-def _connection_options(command: Any) -> Any:
-    command = click.option("--token", envvar="JELLYFIN_TOKEN", required=True, help="Jellyfin API key.")(
-        command
-    )
-    return click.option("--server", envvar="JELLYFIN_SERVER", required=True, help="Jellyfin server URL.")(
-        command
-    )
-
-
-@click.command()
-@_connection_options
-@click.option("--ignore-user", multiple=True, help="Username to exclude (repeatable).")
-@click.option("--threshold", default=80, show_default=True, help="Watched percentage required.")
-@click.option("--min-age", default=90, show_default=True, help="Minimum stale-item age in days.")
-@click.option(
-    "--jellyseerr-server",
-    envvar="JELLYSEERR_SERVER",
-    help="Jellyseerr server base URL; enables requester-watch prioritization.",
-)
-@click.option(
-    "--jellyseerr-token",
-    envvar="JELLYSEERR_TOKEN",
-    help="Jellyseerr API key; required with --jellyseerr-server.",
-)
+@click.command("reclaim")
+@connection_options
+@jellyseerr_options
+@ignore_user_option
+@threshold_option
+@click.option("--min-age", type=int, default=90, show_default=True, help="Minimum stale-item age in days.")
 @output_option
-@click.option(
-    "--quiet",
-    is_flag=True,
-    help="In text mode, only print the list of candidates, no summary.",
-)
+@quiet_option
 def reclaim(
-    server: str,
+    base_url: str,
     token: str,
     ignore_user: tuple[str, ...],
     threshold: int,
@@ -69,19 +55,16 @@ def reclaim(
     quiet: bool,
 ) -> None:
     """Rank watched and stale content for cleanup review."""
-    if bool(jellyseerr_server) != bool(jellyseerr_token):
-        message = "--jellyseerr-server and --jellyseerr-token must be used together."
-        raise click.UsageError(message)
+    require_jellyseerr_pair(jellyseerr_server, jellyseerr_token)
 
     headers = build_headers(token)
-    base_url = server.rstrip("/")
     users = get_users(base_url, headers)
     ignored = set(ignore_user)
     watchers = get_watchers_per_item(base_url, headers, users, ignored, max_age_days=None)
     active = sum(user.get("Name") not in ignored for user in users)
     items = get_all_items(base_url, headers)
     requesters_by_tmdb_id = (
-        get_requesters_by_tmdb_id(jellyseerr_server.rstrip("/"), jellyseerr_token)
+        get_requesters_by_tmdb_id(jellyseerr_server, jellyseerr_token)
         if jellyseerr_server and jellyseerr_token
         else None
     )
@@ -139,12 +122,12 @@ def reclaim(
             click.echo(render_text(results, jellyseerr_enabled=jellyseerr_enabled, quiet=quiet))
 
 
-@click.command()
-@_connection_options
+@click.command("duplicates")
+@connection_options
 @output_option
-def duplicates(server: str, token: str, output_format: OutputFormat) -> None:
+def duplicates(base_url: str, token: str, output_format: OutputFormat) -> None:
     """Find on-disk items with the same TMDb identifier."""
-    items = get_all_items(server.rstrip("/"), build_headers(token))
+    items = get_all_items(base_url, build_headers(token))
     grouped: dict[tuple[str, int], list[LibraryItem]] = defaultdict(list)
     for item in items:
         if item.path and item.tmdb_id is not None:
@@ -203,12 +186,12 @@ def duplicates(server: str, token: str, output_format: OutputFormat) -> None:
     )
 
 
-@click.command()
-@_connection_options
+@click.command("health")
+@connection_options
 @output_option
-def health(server: str, token: str, output_format: OutputFormat) -> None:
+def health(base_url: str, token: str, output_format: OutputFormat) -> None:
     """Report library records that cannot be used for storage analysis."""
-    items = get_all_items(server.rstrip("/"), build_headers(token))
+    items = get_all_items(base_url, build_headers(token))
     missing_path = [item for item in items if not item.path]
     no_size = [item for item in items if item.path and item.size == 0]
     emit(
@@ -246,23 +229,22 @@ def health(server: str, token: str, output_format: OutputFormat) -> None:
 
 
 @click.command("requests")
-@_connection_options
-@click.option("--jellyseerr-server", envvar="JELLYSEERR_SERVER", required=True, help="Jellyseerr server URL.")
-@click.option("--jellyseerr-token", envvar="JELLYSEERR_TOKEN", required=True, help="Jellyseerr API key.")
+@connection_options
+@jellyseerr_options(required=True)
 @output_option
 def requests(
-    server: str,
+    base_url: str,
     token: str,
     jellyseerr_server: str,
     jellyseerr_token: str,
     output_format: OutputFormat,
 ) -> None:
     """Reconcile Jellyseerr requests with media currently in Jellyfin."""
-    items = get_all_items(server.rstrip("/"), build_headers(token))
+    items = get_all_items(base_url, build_headers(token))
     available = {item.tmdb_id for item in items if item.tmdb_id is not None and item.path}
     results = [
         {**request, "available_in_jellyfin": request.get("tmdb_id") in available}
-        for request in get_requests(jellyseerr_server.rstrip("/"), jellyseerr_token)
+        for request in get_requests(jellyseerr_server, jellyseerr_token)
     ]
     landed = sum(bool(request["available_in_jellyfin"]) for request in results)
     emit(
@@ -298,15 +280,13 @@ def requests(
     )
 
 
-@click.command()
-@_connection_options
-@click.option(
-    "--snapshot", type=click.Path(path_type=Path), help="Optional JSON file to write with this report."
-)
+@click.command("report")
+@connection_options
+@click.option("--snapshot", type=click.Path(path_type=Path), help="JSON file to write with this report.")
 @output_option
-def report(server: str, token: str, snapshot: Path | None, output_format: OutputFormat) -> None:
+def report(base_url: str, token: str, snapshot: Path | None, output_format: OutputFormat) -> None:
     """Summarize library size and item counts, optionally saving a snapshot."""
-    items = get_all_items(server.rstrip("/"), build_headers(token))
+    items = get_all_items(base_url, build_headers(token))
     by_type: dict[str, dict[str, int]] = defaultdict(lambda: {"items": 0, "bytes": 0})
     for item in items:
         by_type[item.item_type]["items"] += 1

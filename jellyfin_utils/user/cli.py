@@ -5,7 +5,8 @@ from __future__ import annotations
 import click
 
 from jellyfin_utils.client import build_headers, create_user, get_users
-from jellyfin_utils.output import OutputFormat, Report, emit, output_option
+from jellyfin_utils.options import connection_options, output_option
+from jellyfin_utils.output import OutputFormat, Report, emit
 
 
 @click.group("user")
@@ -15,33 +16,18 @@ def user() -> None:
 
 @user.command("add")
 @click.argument("username")
-@click.option(
-    "--server",
-    envvar="JELLYFIN_SERVER",
-    required=True,
-    help="Jellyfin server base URL (e.g. http://jellyfin.lan:8096).",
-)
-@click.option(
-    "--token",
-    envvar="JELLYFIN_TOKEN",
-    required=True,
-    help="Jellyfin API key with user-management permission.",
-)
+@connection_options
 @click.option(
     "--password",
     hide_input=True,
     confirmation_prompt=True,
     help="User password. If omitted, you will be prompted securely.",
 )
-@click.option(
-    "--no-password",
-    is_flag=True,
-    help="Create an account without a password instead of prompting.",
-)
+@click.option("--no-password", is_flag=True, help="Create an account without a password.")
 @output_option
 def add(
     username: str,
-    server: str,
+    base_url: str,
     token: str,
     password: str | None,
     no_password: bool,
@@ -58,7 +44,6 @@ def add(
     if password is None and not no_password:
         password = click.prompt("Password", hide_input=True, confirmation_prompt=True)
 
-    base_url = server.rstrip("/")
     headers = build_headers(token)
     existing_users = get_users(base_url, headers)
     if any(existing.get("Name", "").casefold() == username.casefold() for existing in existing_users):

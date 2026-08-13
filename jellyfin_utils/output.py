@@ -66,18 +66,6 @@ class Report:
     notes: Sequence[str] = field(default=())
 
 
-def output_option(command: Any) -> Any:  # noqa: ANN401
-    """Add the shared ``--output`` option to a Click command, defaulting to text."""
-    return click.option(
-        "--output",
-        "output_format",
-        type=click.Choice(OutputFormat, case_sensitive=False),
-        default=OutputFormat.TEXT.value,
-        show_default=True,
-        help="Output format.",
-    )(command)
-
-
 def emit(report: Report, output_format: OutputFormat) -> None:
     """Print a report in the requested format."""
     # The CSV writer already terminates its last row.

@@ -2,21 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import cast
 
 import click
 
 from jellyfin_utils.client import build_headers, get_json, post_empty
-from jellyfin_utils.output import OutputFormat, Report, Table, emit, output_option
-
-
-def _connection_options(command: Any) -> Any:
-    command = click.option("--token", envvar="JELLYFIN_TOKEN", required=True, help="Jellyfin API key.")(
-        command
-    )
-    return click.option("--server", envvar="JELLYFIN_SERVER", required=True, help="Jellyfin server URL.")(
-        command
-    )
+from jellyfin_utils.options import connection_options, output_option
+from jellyfin_utils.output import OutputFormat, Report, Table, emit
 
 
 def _tasks(base_url: str, headers: dict[str, str]) -> list[dict]:
@@ -54,11 +46,10 @@ def _action_report(title: str, payload: dict, summary: tuple[tuple[str, object],
 
 
 @server.command()
-@_connection_options
+@connection_options
 @output_option
-def status(server: str, token: str, output_format: OutputFormat) -> None:
+def status(base_url: str, token: str, output_format: OutputFormat) -> None:
     """Show server, storage, task, and active-session status."""
-    base_url = server.rstrip("/")
     headers = build_headers(token)
     info = cast("dict", get_json(base_url, headers, "/System/Info"))
     storage = cast("dict", get_json(base_url, headers, "/System/Info/Storage"))
@@ -102,11 +93,11 @@ def status(server: str, token: str, output_format: OutputFormat) -> None:
 
 
 @server.command()
-@_connection_options
+@connection_options
 @click.option("--library", help="Optional library ID to refresh; omit for all libraries.")
 @click.option("--apply", is_flag=True, help="Actually start the scan.")
 @output_option
-def scan(server: str, token: str, library: str | None, apply: bool, output_format: OutputFormat) -> None:
+def scan(base_url: str, token: str, library: str | None, apply: bool, output_format: OutputFormat) -> None:
     """Preview or start a library scan."""
     target = library or "all libraries"
     if not apply:
@@ -119,7 +110,6 @@ def scan(server: str, token: str, library: str | None, apply: bool, output_forma
             output_format,
         )
         return
-    base_url = server.rstrip("/")
     path = f"/Items/{library}/Refresh" if library else "/Library/Refresh"
     post_empty(base_url, build_headers(token), path)
     emit(
@@ -133,13 +123,13 @@ def scan(server: str, token: str, library: str | None, apply: bool, output_forma
 
 
 @server.command()
-@_connection_options
+@connection_options
 @click.option("--list", "list_tasks", is_flag=True, help="List runnable scheduled tasks.")
 @click.option("--task", help="Exact scheduled-task ID, name, or key to start.")
 @click.option("--apply", is_flag=True, help="Actually start the selected task.")
 @output_option
 def maintenance(
-    server: str,
+    base_url: str,
     token: str,
     list_tasks: bool,
     task: str | None,
@@ -147,7 +137,6 @@ def maintenance(
     output_format: OutputFormat,
 ) -> None:
     """List or run Jellyfin's built-in scheduled maintenance tasks."""
-    base_url = server.rstrip("/")
     tasks = _tasks(base_url, build_headers(token))
     if list_tasks or task is None:
         listed = [
@@ -209,19 +198,18 @@ def maintenance(
 
 
 @server.command()
-@_connection_options
+@connection_options
 @click.option("--stop", "session_id", help="Session ID to stop.")
 @click.option("--confirm", is_flag=True, help="Required with --stop.")
 @output_option
 def sessions(
-    server: str,
+    base_url: str,
     token: str,
     session_id: str | None,
     confirm: bool,
     output_format: OutputFormat,
 ) -> None:
     """List sessions or stop a selected active playback session."""
-    base_url = server.rstrip("/")
     headers = build_headers(token)
     if session_id is not None:
         if not confirm:
@@ -280,13 +268,12 @@ def sessions(
 
 
 @server.command()
-@_connection_options
+@connection_options
 @click.option("--apply", is_flag=True, help="Actually start selected maintenance tasks.")
 @click.option("--confirm", is_flag=True, help="Required with --apply.")
 @output_option
-def cleanup(server: str, token: str, apply: bool, confirm: bool, output_format: OutputFormat) -> None:
+def cleanup(base_url: str, token: str, apply: bool, confirm: bool, output_format: OutputFormat) -> None:
     """Preview or run installed cleanup-oriented scheduled tasks."""
-    base_url = server.rstrip("/")
     headers = build_headers(token)
     keywords = ("clean", "cache", "image", "metadata", "optim")
     candidates = [

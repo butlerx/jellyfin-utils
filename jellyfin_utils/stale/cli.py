@@ -14,7 +14,15 @@ from jellyfin_utils.client import (
     get_watchers_per_item,
 )
 from jellyfin_utils.jellyseerr import get_requesters_by_tmdb_id
-from jellyfin_utils.output import OutputFormat, output_option
+from jellyfin_utils.options import (
+    connection_options,
+    ignore_user_option,
+    jellyseerr_options,
+    output_option,
+    quiet_option,
+    require_jellyseerr_pair,
+)
+from jellyfin_utils.output import OutputFormat
 
 from .models import StaleItem
 from .render import MEDIA_TYPE_ORDER, render_csv, render_json, render_markdown, render_text
@@ -77,55 +85,22 @@ def group_by_type(stale_items: list[StaleItem]) -> dict[str, list[StaleItem]]:
     return grouped
 
 
-@click.command("jellyfin-stale")
-@click.option(
-    "--server",
-    envvar="JELLYFIN_SERVER",
-    required=True,
-    help="Jellyfin server base URL (e.g. http://jellyfin.lan:8096).",
-)
-@click.option(
-    "--token",
-    envvar="JELLYFIN_TOKEN",
-    required=True,
-    help="Jellyfin API key.",
-)
-@click.option(
-    "--ignore-user",
-    multiple=True,
-    help="Username to ignore (can be passed multiple times).",
-)
-@click.option(
-    "--min-age",
-    type=int,
-    default=None,
-    help="Only flag items added more than N days ago (skip recent additions).",
-)
+@click.command("stale")
+@connection_options
+@jellyseerr_options
+@ignore_user_option
+@click.option("--min-age", type=int, default=None, help="Only flag items added more than N days ago.")
 @click.option(
     "--max-watchers",
     type=int,
     default=0,
     show_default=True,
-    help="Maximum number of users who watched an item for it to be considered stale.",
-)
-@click.option(
-    "--jellyseerr-server",
-    envvar="JELLYSEERR_SERVER",
-    help="Jellyseerr server base URL; enables requester-watch prioritization.",
-)
-@click.option(
-    "--jellyseerr-token",
-    envvar="JELLYSEERR_TOKEN",
-    help="Jellyseerr API key; required with --jellyseerr-server.",
+    help="Maximum number of users who watched an item for it to count as stale.",
 )
 @output_option
-@click.option(
-    "--quiet",
-    is_flag=True,
-    help="In text mode, only print the list of stale items, no summary.",
-)
+@quiet_option
 def main(
-    server: str,
+    base_url: str,
     token: str,
     ignore_user: tuple[str, ...],
     min_age: int | None,
@@ -136,11 +111,8 @@ def main(
     quiet: bool,
 ) -> None:
     """Find unwatched or rarely-watched Jellyfin content."""
-    if bool(jellyseerr_server) != bool(jellyseerr_token):
-        message = "--jellyseerr-server and --jellyseerr-token must be used together."
-        raise click.UsageError(message)
+    require_jellyseerr_pair(jellyseerr_server, jellyseerr_token)
 
-    base_url = server.rstrip("/")
     headers = build_headers(token)
 
     users = get_users(base_url, headers)
@@ -152,7 +124,7 @@ def main(
     all_items = get_all_items(base_url, headers)
     now = dt.datetime.now(dt.UTC)
     requesters_by_tmdb_id = (
-        get_requesters_by_tmdb_id(jellyseerr_server.rstrip("/"), jellyseerr_token)
+        get_requesters_by_tmdb_id(jellyseerr_server, jellyseerr_token)
         if jellyseerr_server and jellyseerr_token
         else None
     )
