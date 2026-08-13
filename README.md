@@ -126,13 +126,13 @@ everyone has already seen, which can be removed to free space.
 #### Options
 
 ```
---ignore-user TEXT        Username to ignore (repeatable)
---days INTEGER            Only count plays within the last N days as "watched"
---threshold INTEGER       Percentage of users who must have watched  [default: 80]
 --jellyseerr-server TEXT  Jellyseerr URL (or JELLYSEERR_SERVER env var)
 --jellyseerr-token TEXT   Jellyseerr API key (or JELLYSEERR_TOKEN env var)
+--ignore-user TEXT        Username to ignore (repeatable)
+--days INTEGER            Only count plays within the last N days as watched
+--threshold INTEGER       Percentage of users who must have watched  [default: 80]
 --output [text|json|csv|markdown]  Output format  [default: text]
---quiet                   Text mode: skip summary, show only the item list
+--quiet                   Text mode: print only the item list, no summary
 --help                    Show this message and exit
 ```
 
@@ -206,13 +206,13 @@ content sitting on disk unused.
 #### Options
 
 ```
+--jellyseerr-server TEXT  Jellyseerr URL (or JELLYSEERR_SERVER env var)
+--jellyseerr-token TEXT   Jellyseerr API key (or JELLYSEERR_TOKEN env var)
 --ignore-user TEXT        Username to ignore (repeatable)
 --min-age INTEGER         Only flag items added more than N days ago
 --max-watchers INTEGER    Max watchers for an item to count as stale  [default: 0]
---jellyseerr-server TEXT  Jellyseerr URL (or JELLYSEERR_SERVER env var)
---jellyseerr-token TEXT   Jellyseerr API key (or JELLYSEERR_TOKEN env var)
 --output [text|json|csv|markdown]  Output format  [default: text]
---quiet                   Text mode: skip summary, show only the item list
+--quiet                   Text mode: print only the item list, no summary
 --help                    Show this message and exit
 ```
 
@@ -279,13 +279,13 @@ then largest first.
 #### Options
 
 ```
---ignore-user TEXT        Username to exclude (repeatable)
---threshold INTEGER       Watched percentage required  [default: 80]
---min-age INTEGER         Minimum stale-item age in days  [default: 90]
 --jellyseerr-server TEXT  Jellyseerr URL (or JELLYSEERR_SERVER env var)
 --jellyseerr-token TEXT   Jellyseerr API key (or JELLYSEERR_TOKEN env var)
+--ignore-user TEXT        Username to ignore (repeatable)
+--threshold INTEGER       Percentage of users who must have watched  [default: 80]
+--min-age INTEGER         Minimum stale-item age in days  [default: 90]
 --output [text|json|csv|markdown]  Output format  [default: text]
---quiet                   Text mode: skip summary, show only the item list
+--quiet                   Text mode: print only the item list, no summary
 --help                    Show this message and exit
 ```
 
@@ -486,7 +486,7 @@ same JSON to a file so you can track growth over time.
 #### Options
 
 ```
---snapshot PATH  Optional JSON file to write with this report
+--snapshot PATH  JSON file to write with this report
 --output [text|json|csv|markdown]  Output format  [default: text]
 --help           Show this message and exit
 ```
@@ -684,7 +684,9 @@ This installs all runtime and dev dependencies and creates the virtualenv.
 ```
 jellyfin_utils/
   cli.py         Unified `jellyfin` command group
-  output.py      Shared --output option and text/json/csv/markdown renderers
+  http.py        Shared request helpers; maps HTTP failures to CLI errors
+  options.py     Every shared Click option decorator
+  output.py      Report/Table model and text/json/csv/markdown renderers
   client/        Shared Jellyfin API layer + LibraryItem model
   jellyseerr.py  Read-only Jellyseerr request client
   analysis/      reclaim, duplicates, health, requests, report (+ reclaim renderers)
@@ -692,6 +694,7 @@ jellyfin_utils/
   stale/         models, analysis logic, renderers
   user/          user-management commands
   server/        server-management commands
+tests/           pytest suite; HTTP is stubbed with `responses`
 ```
 
 `client/` is the shared API layer — new commands should import from here rather
@@ -700,21 +703,54 @@ sub-package (e.g. `watched/`) that keeps its models, logic, and rendering
 private; the smaller commands live together in `analysis/cli.py`, with the
 reclaim renderers in `analysis/render.py`.
 
+Every API call goes through `http.py`, which turns timeouts, connection
+failures, bad status codes, and non-JSON bodies into a one-line
+`click.ClickException` rather than a traceback. Library listings are paginated
+in `client.iter_items`, so a large library is never silently truncated.
+
 ### Adding a New Command
 
 1. Create `jellyfin_utils/your_script/` with an `__init__.py` that exports
    `main`
 2. Import shared client:
-   `from jellyfin_utils.client import build_headers, get_users, ...`, and add
-   `@output_option` from `jellyfin_utils.output`, building a `Report` and
-   calling `emit(report, output_format)` so the command supports every output
-   format
-3. Register the command in `jellyfin_utils/cli.py`:
+   `from jellyfin_utils.client import build_headers, get_users, ...`, then build
+   a `Report` and call `emit(report, output_format)` from
+   `jellyfin_utils.output` so the command supports every output format
+3. Take every shared option from `jellyfin_utils.options` rather than declaring
+   it by hand, and stack the decorators in the documented order:
+
+   ```python
+   @click.command("your-script")
+   @connection_options          # --server/--token; you receive `base_url`
+   @jellyseerr_options          # or @jellyseerr_options(required=True)
+   # ...command-specific options...
+   @output_option
+   @quiet_option
+   ```
+
+   `options.py` also holds `ignore_user_option`, `threshold_option`, and
+   `require_jellyseerr_pair`. Add any option a second command needs there
+4. Register the command in `jellyfin_utils/cli.py`:
    ```python
    from jellyfin_utils.your_script.cli import main as your_script
+
    cli.add_command(your_script, "your-script")
    ```
-4. Run `uv sync` to register the new command
+5. Run `uv sync` to register the new command
+
+### Testing
+
+```bash
+# Run the suite
+uv run pytest
+
+# One file, verbose
+uv run pytest tests/test_client.py -v
+```
+
+Tests never touch a real server: `responses` stubs the HTTP layer, and
+`click.testing.CliRunner` drives the commands. CI runs the suite on Python 3.12
+and 3.13.
 
 ### Linting & Type Checking
 
@@ -744,3 +780,9 @@ prek install
 # Run all hooks manually
 prek run --all-files
 ```
+
+---
+
+## License
+
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
