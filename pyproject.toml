@@ -4,7 +4,7 @@ version         = "0.1.0"
 description     = "Jellyfin utility scripts"
 readme          = "README.md"
 requires-python = ">=3.12"
-dependencies    = ["click>=8.2.0", "orjson>=3.11.7", "requests>=2.32.5"]
+dependencies    = ["click>=8.4.2", "orjson>=3.11.9", "requests>=2.34.2"]
 
 [project.scripts]
 jellyfin = "jellyfin_utils.cli:cli"
@@ -13,9 +13,9 @@ jellyfin = "jellyfin_utils.cli:cli"
 dev    = [{ include-group = "lint" }, { include-group = "typing" }]
 lint   = ["ruff>=0.16.1"]
 typing = [
-  "ty>=0.0.14",
+  "ty>=0.0.69",
   "types-python-dateutil>=2.8.19",
-  "types-requests>=2.31.0",
+  "types-requests>=2.33.0.20260712",
 ]
 
 [tool.ruff]
