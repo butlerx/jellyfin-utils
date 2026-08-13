@@ -11,15 +11,13 @@ updates:
       default-days: 7
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "build"
-      prefix-development: "chore"
+      prefix: 'build'
+      prefix-development: 'chore'
     groups:
-      python-minor-and-patch:
+      requests:
         patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
+          - 'requests'
+          - 'types-requests'
 
   - package-ecosystem: github-actions
     directory: /
@@ -30,8 +28,4 @@ updates:
       default-days: 7
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "ci"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+      prefix: 'ci'
