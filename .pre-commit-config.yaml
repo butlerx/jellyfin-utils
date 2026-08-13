@@ -60,12 +60,17 @@ repos:
 
   - repo: local
     hooks:
+      # Runs the ty from uv.lock rather than a second, unpinned copy in a hook
+      # env — otherwise `uv run ty check` and this hook can disagree on the same
+      # code. `uv run` also resolves the project environment itself, so there is
+      # no hard-coded .venv path to go stale.
       - id: ty-check
         name: ty-check
-        language: python
-        entry: ty check
+        language: system
+        entry: uv run --frozen ty check
         pass_filenames: false
-        args:
-          - --python=.venv/
-        additional_dependencies:
-          - ty
+        # Type errors are not local to the changed file, so the whole project is
+        # always checked; this filter only decides whether to check at all.
+        types_or:
+          - python
+          - pyi
