@@ -1,7 +1,7 @@
 [project]
 name            = "jellyfin-utils"
 version         = "0.1.0"
-description     = "Jellyfin utility scripts"
+description     = "CLI for reclaiming Jellyfin storage: find watched, stale, and duplicate media, reconcile Jellyseerr requests, and run server tasks"
 readme          = "README.md"
 requires-python = ">=3.12"
 license         = "Apache-2.0"
@@ -14,6 +14,7 @@ classifiers     = [
   "Intended Audience :: System Administrators",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Multimedia :: Video",
   "Topic :: System :: Systems Administration",
 ]
