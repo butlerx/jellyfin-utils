@@ -41,6 +41,7 @@ def test_forbidden_explains_missing_permission() -> None:
     responses.get(URL, status=403)
     with pytest.raises(click.ClickException) as caught:
         request_json("GET", URL, service="Jellyfin", headers={})
+    assert "GET /System/Info" in caught.value.message
     assert "lacks permission" in caught.value.message
 
 

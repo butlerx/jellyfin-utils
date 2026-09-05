@@ -37,7 +37,9 @@ def _describe_http_error(error: requests.HTTPError, service: str) -> str:
         return f"{service} request failed: {error}"
     status = response.status_code
     reason = response.reason or "error"
-    detail = f"{service} returned {status} {reason}"
+    request = response.request
+    operation = f"{request.method} {request.path_url}" if request is not None else "request"
+    detail = f"{service} returned {status} {reason} for {operation}"
     hint = next((text for code, text in _AUTH_HINTS.items() if code == status), None)
     if hint:
         return f"{detail} — {hint}."

@@ -87,6 +87,9 @@ ignore = [
 [tool.ruff.lint.isort]
 combine-as-imports = true
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"json".msg = "Use orjson instead of json"
+
 [tool.ty.rules]
 possibly-missing-import = "error"
 unused-ignore-comment   = "warn"

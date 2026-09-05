@@ -29,6 +29,8 @@ CONNECTED_COMMANDS = [
     ["reclaim"],
     ["server", "status"],
     ["user", "add", "someone", "--no-password"],
+    ["user", "clone", "source", "copy", "--email", "copy@example.com", "--no-password"],
+    ["user", "verify-clone", "source", "copy"],
 ]
 
 
@@ -70,15 +72,38 @@ def test_connection_options_come_from_the_environment(
 ) -> None:
     monkeypatch.setenv("JELLYFIN_SERVER", BASE_URL)
     monkeypatch.setenv("JELLYFIN_TOKEN", "env-token")
+    if command[:2] == ["user", "clone"]:
+        monkeypatch.setenv("JELLYSEERR_SERVER", JELLYSEERR_URL)
+        monkeypatch.setenv("JELLYSEERR_TOKEN", "env-token")
     with responses.RequestsMock(assert_all_requests_are_fired=False) as mocked:
         mocked.add_passthru("http://")  # any call proves the options resolved
         mocked.get(f"{BASE_URL}/Items", json=items_page([], total=0))
-        mocked.get(f"{BASE_URL}/Users", json=[])
+        mocked.get(
+            f"{BASE_URL}/Users",
+            json=[{"Id": "source-id", "Name": "source"}, {"Id": "copy-id", "Name": "copy"}],
+        )
+        mocked.get(
+            f"{JELLYSEERR_URL}/api/v1/user",
+            json={"results": [], "pageInfo": {"results": 0}},
+        )
+        mocked.get(
+            f"{JELLYSEERR_URL}/api/v1/auth/me",
+            json={"id": 1, "username": "owner", "permissions": 2},
+        )
+        mocked.get(f"{JELLYSEERR_URL}/api/v1/user/9/settings/main", json={})
         mocked.get(f"{BASE_URL}/System/Info", json={})
         mocked.get(f"{BASE_URL}/System/Info/Storage", json={"Libraries": []})
         mocked.get(f"{BASE_URL}/ScheduledTasks", json=[])
         mocked.get(f"{BASE_URL}/Sessions", json=[])
         mocked.post(f"{BASE_URL}/Users/New", json={"Id": "new", "Name": "someone"})
+        mocked.post(
+            f"{JELLYSEERR_URL}/api/v1/user/import-from-jellyfin",
+            json=[{"id": 9, "jellyfinUserId": "copy-id"}],
+        )
+        mocked.post(
+            f"{JELLYSEERR_URL}/api/v1/user/9/settings/main",
+            json={"username": "copy", "email": "copy@example.com"},
+        )
         result = RUNNER.invoke(cli, command)
     assert result.exit_code == 0, result.output
 
@@ -276,6 +301,8 @@ def test_every_command_was_discovered() -> None:
         "server status",
         "stale",
         "user add",
+        "user clone",
+        "user verify-clone",
         "watched",
     }
 
