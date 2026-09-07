@@ -19,18 +19,18 @@ from jellyfin_utils.client import (
     size_gb,
 )
 from jellyfin_utils.jellyseerr import get_requesters_by_tmdb_id, get_requests
+from jellyfin_utils.media import load_media_analysis
 from jellyfin_utils.options import (
     connection_options,
     ignore_user_option,
     jellyseerr_options,
     output_option,
     quiet_option,
-    require_jellyseerr_pair,
     threshold_option,
 )
 from jellyfin_utils.output import OutputFormat, Report, Table, emit
-from jellyfin_utils.stale.cli import find_stale
-from jellyfin_utils.watched.cli import find_candidates
+from jellyfin_utils.stale.service import find_stale
+from jellyfin_utils.watched.service import find_candidates
 
 from .render import render_csv, render_json, render_markdown, render_text
 
@@ -55,21 +55,35 @@ def reclaim(
     quiet: bool,
 ) -> None:
     """Rank watched and stale content for cleanup review."""
-    require_jellyseerr_pair(jellyseerr_server, jellyseerr_token)
-
-    headers = build_headers(token)
-    users = get_users(base_url, headers)
-    ignored = set(ignore_user)
-    watchers = get_watchers_per_item(base_url, headers, users, ignored, max_age_days=None)
-    active = sum(user.get("Name") not in ignored for user in users)
-    items = get_all_items(base_url, headers)
-    requesters_by_tmdb_id = (
-        get_requesters_by_tmdb_id(jellyseerr_server, jellyseerr_token)
-        if jellyseerr_server and jellyseerr_token
-        else None
+    context = load_media_analysis(
+        base_url,
+        token,
+        ignore_user,
+        max_watch_age_days=None,
+        jellyseerr_server=jellyseerr_server,
+        jellyseerr_token=jellyseerr_token,
+        build_headers_fn=build_headers,
+        get_users_fn=get_users,
+        get_watchers_fn=get_watchers_per_item,
+        get_items_fn=get_all_items,
+        get_requesters_fn=get_requesters_by_tmdb_id,
     )
-    candidates = find_candidates(items, watchers, active, threshold, requesters_by_tmdb_id)
-    stale = find_stale(items, watchers, active, 0, min_age, dt.datetime.now(dt.UTC), requesters_by_tmdb_id)
+    candidates = find_candidates(
+        context.items,
+        context.watchers,
+        context.active_user_count,
+        threshold,
+        context.requesters_by_tmdb_id,
+    )
+    stale = find_stale(
+        context.items,
+        context.watchers,
+        context.active_user_count,
+        0,
+        min_age,
+        dt.datetime.now(dt.UTC),
+        context.requesters_by_tmdb_id,
+    )
     merged: dict[str, dict] = {}
     for candidate in candidates:
         merged[candidate.item.item_id] = {
@@ -106,10 +120,8 @@ def reclaim(
         )
         if entry["reason"] == "widely_watched":
             entry["reason"] = "widely_watched_and_stale"
-    results = sorted(
-        merged.values(), key=lambda entry: (not entry["requester_watched"], -float(entry["size_gib"]))
-    )
-    jellyseerr_enabled = requesters_by_tmdb_id is not None
+    results = sorted(merged.values(), key=lambda entry: (not entry["requester_watched"], -entry["size_gib"]))
+    jellyseerr_enabled = context.jellyseerr_enabled
 
     match output_format:
         case OutputFormat.JSON:
