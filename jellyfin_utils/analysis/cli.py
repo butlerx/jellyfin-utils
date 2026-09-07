@@ -5,19 +5,15 @@ from __future__ import annotations
 import datetime as dt
 from collections import defaultdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 import orjson
 
-from jellyfin_utils.client import (
-    LibraryItem,
-    build_headers,
-    display_name,
-    get_all_items,
-    get_users,
-    get_watchers_per_item,
-    size_gb,
-)
+from jellyfin_utils.client.library import get_all_items
+from jellyfin_utils.client.models import LibraryItem, display_name, size_gb
+from jellyfin_utils.client.transport import build_headers, get_users
+from jellyfin_utils.client.watch import get_watchers_per_item
 from jellyfin_utils.jellyseerr import get_requesters_by_tmdb_id, get_requests
 from jellyfin_utils.media import load_media_analysis
 from jellyfin_utils.options import (
@@ -32,7 +28,59 @@ from jellyfin_utils.output import OutputFormat, Report, Table, emit
 from jellyfin_utils.stale.service import find_stale
 from jellyfin_utils.watched.service import find_candidates
 
-from .render import render_csv, render_json, render_markdown, render_text
+from .render import ReclaimRow, render_csv, render_json, render_markdown, render_text
+
+if TYPE_CHECKING:
+    from jellyfin_utils.stale.models import StaleItem
+    from jellyfin_utils.watched.models import Candidate
+
+
+def _reclaim_row(
+    item: LibraryItem,
+    *,
+    reason: str,
+    watchers: int,
+    requested_by: tuple[str, ...],
+    watched_by_requester: tuple[str, ...],
+    requester_watched: bool,
+) -> ReclaimRow:
+    """Convert one analyzed item to the stable reclaim rendering shape."""
+    return {
+        "reason": reason,
+        "item": display_name(item),
+        "series": item.series_name,
+        "id": item.item_id,
+        "type": item.item_type,
+        "path": item.path,
+        "size_gib": round(size_gb(item.size), 2),
+        "size_is_rollup": item.size_is_rollup,
+        "watchers": watchers,
+        "requested_by": list(requested_by),
+        "watched_by_requester": list(watched_by_requester),
+        "requester_watched": requester_watched,
+    }
+
+
+def _candidate_reclaim_row(candidate: Candidate) -> ReclaimRow:
+    return _reclaim_row(
+        candidate.item,
+        reason="widely_watched",
+        watchers=candidate.watch_count,
+        requested_by=candidate.requested_by,
+        watched_by_requester=candidate.watched_by_requester,
+        requester_watched=candidate.requester_watched,
+    )
+
+
+def _stale_reclaim_row(stale_item: StaleItem) -> ReclaimRow:
+    return _reclaim_row(
+        stale_item.item,
+        reason="stale",
+        watchers=stale_item.watch_count,
+        requested_by=stale_item.requested_by,
+        watched_by_requester=stale_item.watched_by_requester,
+        requester_watched=stale_item.requester_watched,
+    )
 
 
 @click.command("reclaim")
@@ -84,40 +132,9 @@ def reclaim(
         dt.datetime.now(dt.UTC),
         context.requesters_by_tmdb_id,
     )
-    merged: dict[str, dict] = {}
-    for candidate in candidates:
-        merged[candidate.item.item_id] = {
-            "reason": "widely_watched",
-            "item": display_name(candidate.item),
-            "series": candidate.item.series_name,
-            "id": candidate.item.item_id,
-            "type": candidate.item.item_type,
-            "path": candidate.item.path,
-            "size_gib": round(size_gb(candidate.item.size), 2),
-            "size_is_rollup": candidate.item.size_is_rollup,
-            "watchers": candidate.watch_count,
-            "requested_by": list(candidate.requested_by),
-            "watched_by_requester": list(candidate.watched_by_requester),
-            "requester_watched": candidate.requester_watched,
-        }
-    for item in stale:
-        entry = merged.setdefault(
-            item.item.item_id,
-            {
-                "reason": "stale",
-                "item": display_name(item.item),
-                "series": item.item.series_name,
-                "id": item.item.item_id,
-                "type": item.item.item_type,
-                "path": item.item.path,
-                "size_gib": round(size_gb(item.item.size), 2),
-                "size_is_rollup": item.item.size_is_rollup,
-                "watchers": item.watch_count,
-                "requested_by": list(item.requested_by),
-                "watched_by_requester": list(item.watched_by_requester),
-                "requester_watched": item.requester_watched,
-            },
-        )
+    merged = {candidate.item.item_id: _candidate_reclaim_row(candidate) for candidate in candidates}
+    for stale_item in stale:
+        entry = merged.setdefault(stale_item.item.item_id, _stale_reclaim_row(stale_item))
         if entry["reason"] == "widely_watched":
             entry["reason"] = "widely_watched_and_stale"
     results = sorted(merged.values(), key=lambda entry: (not entry["requester_watched"], -entry["size_gib"]))

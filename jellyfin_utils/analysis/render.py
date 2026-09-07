@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from typing import TypedDict
 
 import orjson
 
@@ -21,29 +22,46 @@ RULE_WIDTH = 80
 DETAIL_INDENT = " " * 10
 
 
-def _total_gib(entries: list[dict]) -> float:
+class ReclaimRow(TypedDict):
+    """Stable internal shape shared by reclaim selection and rendering."""
+
+    reason: str
+    item: str
+    series: str | None
+    id: str
+    type: str
+    path: str
+    size_gib: float
+    size_is_rollup: bool
+    watchers: int
+    requested_by: list[str]
+    watched_by_requester: list[str]
+    requester_watched: bool
+
+
+def _total_gib(entries: list[ReclaimRow]) -> float:
     """Sum sizes, skipping series whose size is the total of episodes listed separately."""
-    return sum(float(entry["size_gib"]) for entry in entries if not entry["size_is_rollup"])
+    return sum(entry["size_gib"] for entry in entries if not entry["size_is_rollup"])
 
 
 def _truncate(text: str, width: int) -> str:
     return text if len(text) <= width else f"{text[: width - 1]}…"
 
 
-def _title_width(entries: list[dict]) -> int:
+def _title_width(entries: list[ReclaimRow]) -> int:
     longest = max((len(entry["item"]) for entry in entries), default=MIN_TITLE_WIDTH)
     return min(max(longest, MIN_TITLE_WIDTH), MAX_TITLE_WIDTH)
 
 
-def _format_entry_line(entry: dict, title_width: int) -> str:
+def _format_entry_line(entry: ReclaimRow, title_width: int) -> str:
     marker = "*" if entry["requester_watched"] else " "
     title = _truncate(entry["item"], title_width)
     watchers = _plural(entry["watchers"], "watcher")
-    size = f"{float(entry['size_gib']):.2f} GiB"
+    size = f"{entry['size_gib']:.2f} GiB"
     return f"{marker} {entry['type']:<7} {title:<{title_width}}  {watchers:>11}  {size:>10}"
 
 
-def _format_entry_detail(entry: dict) -> list[str]:
+def _format_entry_detail(entry: ReclaimRow) -> list[str]:
     lines = []
     if entry["watched_by_requester"]:
         requesters = ", ".join(entry["watched_by_requester"])
@@ -58,13 +76,13 @@ def _plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
-def _group_rule(reason: str, entries: list[dict]) -> list[str]:
+def _group_rule(reason: str, entries: list[ReclaimRow]) -> list[str]:
     label = REASON_LABELS.get(reason, reason)
     heading = f"── {label} · {_plural(len(entries), 'item')} · {_total_gib(entries):.2f} GiB "
     return ["", heading + "─" * max(RULE_WIDTH - len(heading), 0)]
 
 
-def _header_lines(entries: list[dict], *, jellyseerr_enabled: bool) -> list[str]:
+def _header_lines(entries: list[ReclaimRow], *, jellyseerr_enabled: bool) -> list[str]:
     total = _total_gib(entries)
     lines = [f"Reclaim review · {_plural(len(entries), 'candidate')} · {total:.2f} GiB to reclaim"]
     if any(entry["size_is_rollup"] for entry in entries):
@@ -74,7 +92,7 @@ def _header_lines(entries: list[dict], *, jellyseerr_enabled: bool) -> list[str]
     return lines
 
 
-def render_text(entries: list[dict], *, jellyseerr_enabled: bool, quiet: bool) -> str:
+def render_text(entries: list[ReclaimRow], *, jellyseerr_enabled: bool, quiet: bool) -> str:
     """Render the cleanup queue as a grouped, human-readable report."""
     title_width = _title_width(entries)
 
@@ -98,7 +116,7 @@ def render_text(entries: list[dict], *, jellyseerr_enabled: bool, quiet: bool) -
     return "\n".join(lines)
 
 
-def render_json(entries: list[dict], *, jellyseerr_enabled: bool) -> str:
+def render_json(entries: list[ReclaimRow], *, jellyseerr_enabled: bool) -> str:
     """Render the cleanup queue as indented JSON."""
     payload = {
         "candidates": entries,
@@ -109,7 +127,7 @@ def render_json(entries: list[dict], *, jellyseerr_enabled: bool) -> str:
     return orjson.dumps(payload, option=orjson.OPT_INDENT_2).decode()
 
 
-def render_markdown(entries: list[dict]) -> str:
+def render_markdown(entries: list[ReclaimRow]) -> str:
     """Render the cleanup queue as a compact Markdown table."""
     lines = [
         "| Priority | Reason | Type | Series | Title | Watchers | Requested by | Requester watched | Size |",
@@ -127,7 +145,7 @@ def render_markdown(entries: list[dict]) -> str:
                 str(entry["watchers"]),
                 ", ".join(entry["requested_by"]) or "—",
                 ", ".join(entry["watched_by_requester"]) or "—",
-                f"{float(entry['size_gib']):.2f} GiB",
+                f"{entry['size_gib']:.2f} GiB",
             )
         )
         + " |"
@@ -136,7 +154,7 @@ def render_markdown(entries: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def render_csv(entries: list[dict]) -> str:
+def render_csv(entries: list[ReclaimRow]) -> str:
     """Render the cleanup queue as CSV with headers."""
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -164,7 +182,7 @@ def render_csv(entries: list[dict]) -> str:
                 entry["watchers"],
                 ", ".join(entry["watched_by_requester"]),
                 ", ".join(entry["requested_by"]),
-                f"{float(entry['size_gib']):.2f}",
+                f"{entry['size_gib']:.2f}",
                 entry["id"],
                 entry["path"],
             ]

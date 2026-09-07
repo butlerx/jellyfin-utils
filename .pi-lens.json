@@ -2,7 +2,14 @@
   "disabledServers": ["python"],
   "rules": {
     "project-type-checker": {
-      "disable": ["reportMissingImports"]
+      "disable": [
+        "reportMissingImports",
+        "Pyright:reportMissingImports",
+        "pyright:reportMissingImports",
+        "reportFunctionMemberAccess",
+        "Pyright:reportFunctionMemberAccess",
+        "pyright:reportFunctionMemberAccess"
+      ]
     }
   }
 }

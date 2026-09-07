@@ -1,4 +1,4 @@
-"""Characterization tests for the watched command and its output contracts."""
+"""Protect watched command behavior and serialized output contracts."""
 
 from __future__ import annotations
 

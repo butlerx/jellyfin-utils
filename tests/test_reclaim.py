@@ -1,4 +1,4 @@
-"""Characterization tests for the reclaim command and its output contracts."""
+"""Protect reclaim command behavior and serialized output contracts."""
 
 from __future__ import annotations
 

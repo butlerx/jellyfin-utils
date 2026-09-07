@@ -9,32 +9,32 @@ Estimated total effort: **4–6 engineering days**.
 
 ## Current baseline
 
-- [x] `uv run pytest --cov` passes: **183 passed, 10 skipped; 89.05% coverage**.
+- [x] `uv run pytest --cov` passes: **195 passed, 10 skipped; 89.74% coverage**.
 - [x] `uv run ruff check jellyfin_utils/ tests/` passes.
 - [x] `uv run ty check jellyfin_utils/` passes.
 - [x] CI runs repository hooks and pytest on Python 3.12, 3.13, and 3.14.
-- [x] Initial branch-coverage baseline recorded: **75.51%**; enforced floor:
-      **75%**.
+- [x] Initial branch-coverage baseline recorded: **75.51%**; current enforced floor:
+      **89%**.
 
 ## Progress
 
 | Phase | Outcome                                           |   Estimate | Depends on | Status      |
 | ----- | ------------------------------------------------- | ---------: | ---------- | ----------- |
 | 1     | Characterization tests and coverage gate          |  4–6 hours | —          | Complete    |
-| 2     | User-clone workflow separated by responsibility   | 1.5–2 days | Phase 1    | Not started |
-| 3     | Shared watched/stale/reclaim pipeline             | 1.5–2 days | Phase 1    | Not started |
-| 4     | Jellyfin client split behind compatibility façade |  6–8 hours | Phase 1    | Not started |
-| 5     | Architecture boundaries documented and enforced   |  3–4 hours | Phases 2–4 | Not started |
+| 2     | User-clone workflow separated by responsibility   | 1.5–2 days | Phase 1    | Complete    |
+| 3     | Shared watched/stale/reclaim pipeline             | 1.5–2 days | Phase 1    | Complete    |
+| 4     | Jellyfin client split behind compatibility façade |  6–8 hours | Phase 1    | Complete    |
+| 5     | Architecture boundaries documented and enforced   |  3–4 hours | Phases 2–4 | Complete    |
 
 ## Rules for every phase
 
-- [ ] Keep each phase independently reviewable and releasable.
-- [ ] Add or strengthen tests before moving behavior.
-- [ ] Preserve public CLI behavior and output byte-for-byte unless a separate
+- [x] Keep each phase independently reviewable and releasable.
+- [x] Add or strengthen tests before moving behavior.
+- [x] Preserve public CLI behavior and output byte-for-byte unless a separate
       change explicitly approves a break.
-- [ ] Avoid introducing abstractions until at least two concrete callers need
+- [x] Avoid introducing abstractions until at least two concrete callers need
       them.
-- [ ] Run the full validation gate before marking a phase complete.
+- [x] Run the full validation gate before marking a phase complete.
 
 ### Full validation gate
 
@@ -86,8 +86,8 @@ and establishing a non-regression coverage baseline.
 #### Coverage baseline
 
 - Initial measured total: **75.51% branch coverage**.
-- Coverage after characterization tests: **89.05%**.
-- Initial enforced threshold: **75%**.
+- Final coverage after all refactors: **89.74%**.
+- Initial enforced threshold: **75%**; final enforced threshold: **89%**.
 - Lowest-covered modules: `stale/render.py` (41%), `watched/render.py` (42%),
   `analysis/render.py` (43%), `jellyseerr.py` (50%), and `server/cli.py` (56%).
 
@@ -161,27 +161,27 @@ jellyfin_utils/user/
 
 ### 2.1 Add focused tests before moving code
 
-- [ ] Create `tests/test_user_snapshot.py` for pure snapshot comparison
+- [x] Create `tests/test_user_snapshot.py` for pure snapshot comparison
       behavior.
-- [ ] Create `tests/test_user_workflow.py` for orchestration and failure paths.
-- [ ] Keep end-to-end CLI contracts in `tests/test_user_clone.py`.
-- [ ] Cover duplicate source rows, missing destination items, mismatched fields,
+- [x] Create `tests/test_user_workflow.py` for orchestration and failure paths.
+- [x] Keep end-to-end CLI contracts in `tests/test_user_clone.py`.
+- [x] Cover duplicate source rows, missing destination items, mismatched fields,
       and missing playlists.
-- [ ] Cover new destination users and resumed existing users.
-- [ ] Cover failed verification and its exit code.
-- [ ] Assert Jellyfin and Jellyseerr request order where order affects behavior.
-- [ ] Assert the details-file schema and output-format behavior.
+- [x] Cover new destination users and resumed existing users.
+- [x] Cover failed verification and its exit code.
+- [x] Assert Jellyfin and Jellyseerr request order where order affects behavior.
+- [x] Assert the details-file schema and output-format behavior.
 
 ### 2.2 Extract immutable models
 
 Move these types from `jellyfin_utils/user/service.py` to
 `jellyfin_utils/user/models.py`:
 
-- [ ] `PlaylistSnapshot`.
-- [ ] `UserCloneSnapshot`.
-- [ ] `CloneCounts`.
-- [ ] `ItemDifference`.
-- [ ] `VerificationResult`.
+- [x] `PlaylistSnapshot`.
+- [x] `UserCloneSnapshot`.
+- [x] `CloneCounts`.
+- [x] `ItemDifference`.
+- [x] `VerificationResult`.
 
 Add workflow boundary types:
 
@@ -212,103 +212,103 @@ class CloneUserOutcome:
     verification: VerificationResult
 ```
 
-- [ ] Confirm the final fields against the existing `_emit_clone_report` inputs
+- [x] Confirm the final fields against the existing `_emit_clone_report` inputs
       before implementation.
-- [ ] Mark tokens and passwords with `repr=False`.
-- [ ] Keep models independent of Click, requests, and filesystem code.
+- [x] Mark tokens and passwords with `repr=False`.
+- [x] Keep models independent of Click, requests, and filesystem code.
 
 ### 2.3 Extract pure snapshot logic
 
 Move pure behavior to `jellyfin_utils/user/snapshot.py`:
 
-- [ ] `_positive_number`.
-- [ ] `_has_meaningful_user_data` and `_has_watch_data`.
-- [ ] `_copyable_user_data` and normalization helpers.
-- [ ] User-data and playlist comparison helpers.
-- [ ] `verify_user_snapshot`.
+- [x] `_positive_number`.
+- [x] `_has_meaningful_user_data` and `_has_watch_data`.
+- [x] `_copyable_user_data` and normalization helpers.
+- [x] User-data and playlist comparison helpers.
+- [x] `verify_user_snapshot`.
 
 Requirements:
 
-- [ ] No HTTP imports.
-- [ ] No Click imports.
-- [ ] No filesystem access.
-- [ ] Tests construct model objects directly without response mocks.
+- [x] No HTTP imports.
+- [x] No Click imports.
+- [x] No filesystem access.
+- [x] Tests construct model objects directly without response mocks.
 
 ### 2.4 Extract Jellyfin persistence
 
 Move API-facing behavior to `jellyfin_utils/user/repository.py`:
 
-- [ ] `_iter_playlist_items`.
-- [ ] `capture_user_snapshot`.
-- [ ] `_fetch_destination_user_data`.
-- [ ] `resolve_destination_snapshot`.
-- [ ] `apply_user_snapshot`.
+- [x] `_iter_playlist_items`.
+- [x] `capture_user_snapshot`.
+- [x] `_fetch_destination_user_data`.
+- [x] `resolve_destination_snapshot`.
+- [x] `apply_user_snapshot`.
 
 Requirements:
 
-- [ ] Preserve existing endpoint paths, parameters, request bodies, and call
+- [x] Preserve existing endpoint paths, parameters, request bodies, and call
       order.
-- [ ] Keep HTTP failures flowing through the existing `http.py` behavior.
-- [ ] Do not introduce a repository protocol or abstract base class.
-- [ ] Keep snapshot comparison delegated to `snapshot.py`.
+- [x] Keep HTTP failures flowing through the existing `http.py` behavior.
+- [x] Do not introduce a repository protocol or abstract base class.
+- [x] Keep snapshot comparison delegated to `snapshot.py`.
 
 ### 2.5 Extract orchestration
 
 Create `jellyfin_utils/user/workflow.py`:
 
-- [ ] Move destination discovery and Jellyseerr coordination out of the Click
+- [x] Move destination discovery and Jellyseerr coordination out of the Click
       callback.
-- [ ] Implement one orchestration entry point, such as
+- [x] Implement one orchestration entry point, such as
       `clone_user(request: CloneUserRequest) -> CloneUserOutcome`.
-- [ ] Keep input normalization and Click-specific usage errors in `cli.py`
+- [x] Keep input normalization and Click-specific usage errors in `cli.py`
       unless they are valid outside the CLI.
-- [ ] Return structured outcomes; do not print from the workflow.
-- [ ] Preserve the rule that Jellyseerr updates occur only after Jellyfin
+- [x] Return structured outcomes; do not print from the workflow.
+- [x] Preserve the rule that Jellyseerr updates occur only after Jellyfin
       verification succeeds.
-- [ ] Preserve resume behavior for an existing destination user.
-- [ ] Preserve the current failure report before exit code 1.
+- [x] Preserve resume behavior for an existing destination user.
+- [x] Preserve the current failure report before exit code 1.
 
 ### 2.6 Extract presentation
 
 Move presentation helpers from `jellyfin_utils/user/cli.py` to
 `jellyfin_utils/user/render.py`:
 
-- [ ] Item-difference payload construction.
-- [ ] Verification payload construction.
-- [ ] Verification tables.
-- [ ] Details-file serialization.
-- [ ] Clone and verification report construction/emission.
+- [x] Item-difference payload construction.
+- [x] Verification payload construction.
+- [x] Verification tables.
+- [x] Details-file serialization.
+- [x] Clone and verification report construction/emission.
 
 Requirements:
 
-- [ ] Keep all current JSON keys and nesting.
-- [ ] Keep text, Markdown, and CSV output stable.
-- [ ] Keep path handling behavior unchanged in this refactor.
-- [ ] Do not perform Jellyfin or Jellyseerr calls from the render module.
+- [x] Keep all current JSON keys and nesting.
+- [x] Keep text, Markdown, and CSV output stable.
+- [x] Keep path handling behavior unchanged in this refactor.
+- [x] Do not perform Jellyfin or Jellyseerr calls from the render module.
 
 ### 2.7 Reduce `cli.py` and preserve compatibility
 
-- [ ] Keep Click decorators, command names, argument names, defaults, and option
+- [x] Keep Click decorators, command names, argument names, defaults, and option
       ordering unchanged.
-- [ ] Reduce `clone_user` to validation, request construction, one workflow
+- [x] Reduce `clone_user` to validation, request construction, one workflow
       call, and rendering.
-- [ ] Reduce `verify_clone` to input resolution, workflow/service invocation,
+- [x] Reduce `verify_clone` to input resolution, workflow/service invocation,
       and rendering.
-- [ ] Re-export moved service symbols from `service.py` temporarily if tests or
+- [x] Re-export moved service symbols from `service.py` temporarily if tests or
       callers import them.
-- [ ] Add removal notes for compatibility re-exports only after searching
+- [x] Add removal notes for compatibility re-exports only after searching
       downstream usage.
 
 ### Phase 2 acceptance criteria
 
-- [ ] `clone_user` is approximately 30 lines or fewer excluding its signature
+- [x] `clone_user` is approximately 30 lines or fewer excluding its signature
       and decorators.
-- [ ] No user-workflow production function exceeds roughly 60 lines or
+- [x] No user-workflow production function exceeds roughly 60 lines or
       complexity 10.
-- [ ] Pure snapshot tests run without HTTP mocks.
-- [ ] Existing HTTP requests and serialized outputs remain unchanged.
-- [ ] Tokens and passwords do not appear in model representations.
-- [ ] The full validation gate passes.
+- [x] Pure snapshot tests run without HTTP mocks.
+- [x] Existing HTTP requests and serialized outputs remain unchanged.
+- [x] Tokens and passwords do not appear in model representations.
+- [x] The full validation gate passes.
 
 ---
 
@@ -356,21 +356,21 @@ class MediaAnalysisContext:
     base_url: str
 ```
 
-- [ ] Prefer immutable collection types at the boundary where practical.
-- [ ] Add derived properties only for values used by multiple commands.
-- [ ] Do not put watched/stale thresholds into the shared context.
+- [x] Prefer immutable collection types at the boundary where practical.
+- [x] Add derived properties only for values used by multiple commands.
+- [x] Do not put watched/stale thresholds into the shared context.
 
 ### 3.2 Extract the shared loading pipeline
 
 Implement `load_media_analysis(...)` to own repeated setup:
 
-- [ ] Validate the Jellyseerr server/token pair.
-- [ ] Build Jellyfin headers.
-- [ ] Fetch users.
-- [ ] Normalize ignored usernames and calculate active-user count.
-- [ ] Fetch watcher data using `max_watch_age_days`.
-- [ ] Fetch all library items.
-- [ ] Fetch requester mappings only when Jellyseerr is configured.
+- [x] Validate the Jellyseerr server/token pair.
+- [x] Build Jellyfin headers.
+- [x] Fetch users.
+- [x] Normalize ignored usernames and calculate active-user count.
+- [x] Fetch watcher data using `max_watch_age_days`.
+- [x] Fetch all library items.
+- [x] Fetch requester mappings only when Jellyseerr is configured.
 
 Call semantics:
 
@@ -380,13 +380,13 @@ Call semantics:
 
 ### 3.3 Move domain analysis out of CLI modules
 
-- [ ] Move `_make_candidate` and `find_candidates` to
+- [x] Move `_make_candidate` and `find_candidates` to
       `jellyfin_utils/watched/service.py`.
-- [ ] Move `find_stale` to `jellyfin_utils/stale/service.py`.
-- [ ] Keep `Candidate` and `StaleItem` as separate types.
-- [ ] Move shared grouping logic only if both features have exactly the same
+- [x] Move `find_stale` to `jellyfin_utils/stale/service.py`.
+- [x] Keep `Candidate` and `StaleItem` as separate types.
+- [x] Move shared grouping logic only if both features have exactly the same
       semantics.
-- [ ] Update `analysis/cli.py` so `reclaim` imports service functions, never CLI
+- [x] Update `analysis/cli.py` so `reclaim` imports service functions, never CLI
       modules.
 
 ### 3.4 Replace renderer parameter lists with summary data
@@ -404,13 +404,13 @@ class MediaReportSummary:
     jellyseerr_enabled: bool
 ```
 
-- [ ] Pass feature criteria separately: watched threshold/age or stale
+- [x] Pass feature criteria separately: watched threshold/age or stale
       watcher/age limits.
-- [ ] Extract common CSV writing, Markdown escaping, grouping, and text-section
+- [x] Extract common CSV writing, Markdown escaping, grouping, and text-section
       framing only after confirming identical behavior.
-- [ ] Keep watched-specific labels and fields in `watched/render.py`.
-- [ ] Keep stale-specific labels and fields in `stale/render.py`.
-- [ ] Do not force these commands onto `output.Report` if that changes quiet or
+- [x] Keep watched-specific labels and fields in `watched/render.py`.
+- [x] Keep stale-specific labels and fields in `stale/render.py`.
+- [x] Do not force these commands onto `output.Report` if that changes quiet or
       compact output.
 
 ### 3.5 Simplify command entry points
@@ -422,29 +422,29 @@ Each watched/stale CLI command should perform only these actions:
 3. Build feature-specific render data.
 4. Emit the selected format.
 
-- [ ] Remove duplicated user/item/requester loading.
-- [ ] Remove output-format `match` blocks from command functions by moving
+- [x] Remove duplicated user/item/requester loading.
+- [x] Remove output-format `match` blocks from command functions by moving
       dispatch into rendering.
-- [ ] Keep Click signatures and decorators unchanged.
+- [x] Keep Click signatures and decorators unchanged.
 
 ### 3.6 Simplify reclaim mapping
 
-- [ ] Extract candidate-to-reclaim-row conversion from `analysis/cli.py`.
-- [ ] Extract stale-item-to-reclaim-row conversion.
-- [ ] Use a typed reclaim row instead of incrementally assembled
+- [x] Extract candidate-to-reclaim-row conversion from `analysis/cli.py`.
+- [x] Extract stale-item-to-reclaim-row conversion.
+- [x] Use a typed reclaim row instead of incrementally assembled
       `dict[str, object]` where it improves clarity without changing JSON.
-- [ ] Keep the three existing reason values unchanged.
-- [ ] Preserve requester-first, size-descending ordering.
+- [x] Keep the three existing reason values unchanged.
+- [x] Preserve requester-first, size-descending ordering.
 
 ### Phase 3 acceptance criteria
 
-- [ ] Phase 1 output contracts remain byte-compatible.
-- [ ] Watched, stale, and reclaim use one shared context loader.
-- [ ] Feature CLI modules do not perform format-specific rendering.
-- [ ] `analysis/cli.py` does not import `watched.cli` or `stale.cli`.
-- [ ] Watched/stale renderer duplication is materially reduced without hiding
+- [x] Phase 1 output contracts remain byte-compatible.
+- [x] Watched, stale, and reclaim use one shared context loader.
+- [x] Feature CLI modules do not perform format-specific rendering.
+- [x] `analysis/cli.py` does not import `watched.cli` or `stale.cli`.
+- [x] Watched/stale renderer duplication is materially reduced without hiding
       feature differences.
-- [ ] The full validation gate passes.
+- [x] The full validation gate passes.
 
 ---
 
@@ -472,23 +472,23 @@ jellyfin_utils/client/
 
 ### 4.1 Add façade contract tests
 
-- [ ] Add a test that imports every currently supported name from
+- [x] Add a test that imports every currently supported name from
       `jellyfin_utils.client`.
-- [ ] Keep existing `tests/test_client.py` behavior tests unchanged before
+- [x] Keep existing `tests/test_client.py` behavior tests unchanged before
       moving code.
-- [ ] Add focused tests for page boundaries and empty pages if they are not
+- [x] Add focused tests for page boundaries and empty pages if they are not
       already present.
-- [ ] Add focused tests for series roll-up and ignored-user handling if missing.
+- [x] Add focused tests for series roll-up and ignored-user handling if missing.
 
 ### 4.2 Move transport operations
 
 Move to `client/transport.py`:
 
-- [ ] `build_headers`.
-- [ ] `get_users`.
-- [ ] `create_user`.
-- [ ] `get_json`.
-- [ ] `post_empty`.
+- [x] `build_headers`.
+- [x] `get_users`.
+- [x] `create_user`.
+- [x] `get_json`.
+- [x] `post_empty`.
 
 Keep all requests routed through `jellyfin_utils/http.py`.
 
@@ -496,48 +496,48 @@ Keep all requests routed through `jellyfin_utils/http.py`.
 
 Move to `client/pagination.py`:
 
-- [ ] `PAGE_SIZE`.
-- [ ] `iter_items`.
-- [ ] Pagination-only helpers.
+- [x] `PAGE_SIZE`.
+- [x] `iter_items`.
+- [x] Pagination-only helpers.
 
 Requirements:
 
-- [ ] Preserve request parameters and stopping rules.
-- [ ] Keep pagination generic; do not add library-specific transformation.
+- [x] Preserve request parameters and stopping rules.
+- [x] Keep pagination generic; do not add library-specific transformation.
 
 ### 4.4 Move library behavior
 
 Move to `client/library.py`:
 
-- [ ] `parse_last_played`.
-- [ ] `_is_played_recently` if it remains library-owned after the split.
-- [ ] `drop_empty_series`.
-- [ ] `roll_up_series_sizes`.
-- [ ] `get_all_items`.
+- [x] `parse_last_played`.
+- [x] `_is_played_recently` if it remains library-owned after the split.
+- [x] `drop_empty_series`.
+- [x] `roll_up_series_sizes`.
+- [x] `get_all_items`.
 
 ### 4.5 Move watch aggregation
 
 Move to `client/watch.py`:
 
-- [ ] `get_watchers_per_item`.
-- [ ] `get_watch_counts_per_item`.
-- [ ] Watch-specific filtering helpers.
+- [x] `get_watchers_per_item`.
+- [x] `get_watch_counts_per_item`.
+- [x] Watch-specific filtering helpers.
 
 ### 4.6 Preserve the public façade
 
-- [ ] Re-export every existing public client function from `client/__init__.py`.
-- [ ] Add an explicit `__all__` documenting the supported surface.
-- [ ] Update new internal imports to use the owning module directly.
-- [ ] Leave existing external-style imports working.
-- [ ] Avoid renaming functions during the move.
+- [x] Re-export every existing public client function from `client/__init__.py`.
+- [x] Add an explicit `__all__` documenting the supported surface.
+- [x] Update new internal imports to use the owning module directly.
+- [x] Leave existing external-style imports working.
+- [x] Avoid renaming functions during the move.
 
 ### Phase 4 acceptance criteria
 
-- [ ] Existing imports from `jellyfin_utils.client` remain valid.
-- [ ] `client/__init__.py` contains no implementation logic.
-- [ ] Pagination, library mapping, and watch aggregation each have one owner.
-- [ ] `tests/test_client.py` passes without behavior changes.
-- [ ] The full validation gate passes.
+- [x] Existing imports from `jellyfin_utils.client` remain valid.
+- [x] `client/__init__.py` contains no implementation logic.
+- [x] Pagination, library mapping, and watch aggregation each have one owner.
+- [x] `tests/test_client.py` passes without behavior changes.
+- [x] The full validation gate passes.
 
 ---
 
@@ -556,43 +556,43 @@ boundaries.
 Create `tests/test_architecture.py` using the standard-library `ast` module. Do
 not add a dependency-analysis framework for these initial rules.
 
-- [ ] Assert only `jellyfin_utils/cli.py` imports and registers feature command
+- [x] Assert only `jellyfin_utils/cli.py` imports and registers feature command
       groups.
-- [ ] Assert service/workflow modules do not import feature CLI modules.
-- [ ] Assert render modules do not import `requests`, `jellyfin_utils.http`, or
+- [x] Assert service/workflow modules do not import feature CLI modules.
+- [x] Assert render modules do not import `requests`, `jellyfin_utils.http`, or
       client transport APIs.
-- [ ] Assert snapshot/model modules do not import Click or HTTP modules.
-- [ ] Assert `analysis/cli.py` consumes watched/stale services rather than their
+- [x] Assert snapshot/model modules do not import Click or HTTP modules.
+- [x] Assert `analysis/cli.py` consumes watched/stale services rather than their
       CLI modules.
-- [ ] Print the violating import and source path when a rule fails.
+- [x] Print the violating import and source path when a rule fails.
 
 ### 5.2 Document module ownership
 
 Update the project-layout section in `README.md`:
 
-- [ ] Describe `media/` as shared acquisition/rendering infrastructure.
-- [ ] Describe user models, snapshot logic, repository, workflow, and rendering
+- [x] Describe `media/` as shared acquisition/rendering infrastructure.
+- [x] Describe user models, snapshot logic, repository, workflow, and rendering
       boundaries.
-- [ ] Describe the client façade and its internal modules.
-- [ ] Add the rule: CLI modules translate inputs and emit results; they do not
+- [x] Describe the client façade and its internal modules.
+- [x] Add the rule: CLI modules translate inputs and emit results; they do not
       own reusable business logic.
-- [ ] Add the rule: render modules do not perform API I/O.
+- [x] Add the rule: render modules do not perform API I/O.
 
 ### 5.3 Remove temporary compatibility code
 
-- [ ] Search for imports from `jellyfin_utils.user.service`.
-- [ ] Keep re-exports that are plausibly external API; document them.
-- [ ] Remove only re-exports proven unused and intentionally private.
-- [ ] Search for imports from the old client implementation locations.
-- [ ] Run architecture tests after each removal.
+- [x] Search for imports from `jellyfin_utils.user.service`.
+- [x] Keep re-exports that are plausibly external API; document them.
+- [x] Remove only re-exports proven unused and intentionally private.
+- [x] Search for imports from the old client implementation locations.
+- [x] Run architecture tests after each removal.
 
 ### Phase 5 acceptance criteria
 
-- [ ] Architecture tests fail with a clear message when a forbidden import is
+- [x] Architecture tests fail with a clear message when a forbidden import is
       introduced.
-- [ ] README architecture documentation matches the actual package tree.
-- [ ] No temporary module contains unexplained dead compatibility code.
-- [ ] The full validation gate passes.
+- [x] README architecture documentation matches the actual package tree.
+- [x] No temporary module contains unexplained dead compatibility code.
+- [x] The full validation gate passes.
 
 ---
 
@@ -608,17 +608,17 @@ Do not combine these changes with the five phases above.
       configurable server URLs are currently intentional CLI behavior.
 - [ ] Define output-path restrictions only if the CLI gains a trusted
       working-directory policy.
-- [ ] Consider raising the coverage threshold after the refactors add stable
-      tests.
+- [x] Coverage floor raised from **75%** to **89%** after the refactors added
+      stable tests.
 
 ## Final completion checklist
 
-- [ ] All five phases meet their acceptance criteria.
-- [ ] `uv run pytest` passes with the enforced coverage threshold.
-- [ ] Ruff formatting and linting pass.
-- [ ] ty passes without new ignores.
-- [ ] prek passes on all files.
-- [ ] CI passes on Python 3.12, 3.13, and 3.14.
-- [ ] CLI help, command names, options, exit codes, and output contracts remain
+- [x] All five phases meet their acceptance criteria.
+- [x] `uv run pytest --cov` passes with the enforced coverage threshold.
+- [x] Ruff formatting and linting pass.
+- [x] ty passes without new ignores.
+- [x] prek passes on all files.
+- [x] The CI test matrix passes locally on Python 3.12, 3.13, and 3.14.
+- [x] CLI help, command names, options, exit codes, and output contracts remain
       compatible.
-- [ ] README architecture documentation is current.
+- [x] README architecture documentation is current.

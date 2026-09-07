@@ -55,7 +55,7 @@ branch = true
 source = ["jellyfin_utils"]
 
 [tool.coverage.report]
-fail_under   = 75
+fail_under   = 89
 show_missing = true
 
 [tool.pytest.ini_options]
