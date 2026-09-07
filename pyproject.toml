@@ -34,7 +34,11 @@ dev    = [
   { include-group = "typing" },
 ]
 lint   = ["ruff>=0.16.1"]
-test   = ["pytest>=8.4.0", "responses>=0.25.9"]
+test   = [
+  "pytest>=8.4.0",
+  "pytest-cov>=7.0.0",
+  "responses>=0.25.9",
+]
 typing = [
   "ty>=0.0.69",
   "types-python-dateutil>=2.9.0.20260716",
@@ -45,6 +49,14 @@ typing = [
 # PEP 639 `license` / `license-files` need setuptools 77 or newer.
 requires      = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
+
+[tool.coverage.run]
+branch = true
+source = ["jellyfin_utils"]
+
+[tool.coverage.report]
+fail_under   = 75
+show_missing = true
 
 [tool.pytest.ini_options]
 addopts   = ["--strict-config", "--strict-markers", "-ra"]

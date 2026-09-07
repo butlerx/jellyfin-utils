@@ -1,0 +1,8 @@
+{
+  "disabledServers": ["python"],
+  "rules": {
+    "project-type-checker": {
+      "disable": ["reportMissingImports"]
+    }
+  }
+}
