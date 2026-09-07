@@ -123,25 +123,47 @@ This installs all runtime and dev dependencies and creates the virtualenv.
 
 ```text
 jellyfin_utils/
-  cli.py         Unified `jellyfin` command group
-  http.py        Shared request helpers; maps HTTP failures to CLI errors
-  options.py     Every shared Click option decorator
-  output.py      Report/Table model and text/json/csv/markdown renderers
-  client/        Shared Jellyfin API layer + LibraryItem model
-  jellyseerr.py  Jellyseerr request and user-management client
-  analysis/      reclaim, duplicates, health, requests, report (+ reclaim renderers)
-  watched/       models, analysis logic, renderers
-  stale/         models, analysis logic, renderers
-  user/          user-management commands and clone verification
-  server/        server-management commands
-tests/           pytest suite; HTTP is stubbed with `responses`
+  cli.py              Unified `jellyfin` command group and composition root
+  http.py             Shared request helpers; maps HTTP failures to CLI errors
+  options.py          Shared Click option decorators
+  output.py           Report/Table model and generic output renderers
+  jellyseerr.py       Jellyseerr transport and user-management operations
+  client/
+    __init__.py       Public compatibility facade
+    models.py         Library item model and pure display/size helpers
+    transport.py      Jellyfin request operations
+    pagination.py     Paginated item transport
+    library.py        Library queries and transformations
+    watch.py          Watch-state queries
+  media/
+    context.py        Shared watched/stale/reclaim data acquisition
+    render.py         Shared media rendering primitives
+  analysis/
+    cli.py            Reclaim, duplicates, health, requests, and report commands
+    render.py         Reclaim output formatting
+  watched/            CLI, models, service, and renderer
+  stale/              CLI, models, service, and renderer
+  user/
+    cli.py            User command definitions
+    models.py         Clone request, snapshot, and result models
+    snapshot.py       Pure snapshot normalization and comparison
+    repository.py     Snapshot API reads and writes
+    workflow.py       Clone and verification orchestration
+    render.py         User command output formatting
+    service.py        Compatibility facade for the former public module
+  server/             Server-management CLI
+tests/                pytest suite; HTTP is stubbed with `responses`
 ```
 
-`client/` is the shared API layer — new commands should import from here rather
-than making raw Jellyfin API calls directly. Each larger command gets its own
-sub-package (e.g. `watched/`) that keeps its models, logic, and rendering
-private; the smaller commands live together in `analysis/cli.py`, with the
-reclaim renderers in `analysis/render.py`.
+Architecture ownership rules:
+
+- CLI modules translate Click options into calls and emit results; they do not
+  own reusable domain logic.
+- Services, workflows, and snapshots own reusable domain logic.
+- Repositories and transport modules own API I/O.
+- Renderers format prepared data and perform no API I/O.
+- `jellyfin_utils/cli.py` is the application composition root;
+  `client/__init__.py` is a compatibility facade over focused client modules.
 
 Every API call goes through `http.py`, which turns timeouts, connection
 failures, bad status codes, and non-JSON bodies into a one-line
@@ -192,8 +214,8 @@ uv run pytest tests/test_client.py -v
 ```
 
 Tests never touch a real server: `responses` stubs the HTTP layer, and
-`click.testing.CliRunner` drives the commands. CI runs the suite on Python 3.12
-and 3.13.
+`click.testing.CliRunner` drives the commands. CI runs the suite on Python
+3.12–3.14.
 
 ### Linting & Type Checking
 
