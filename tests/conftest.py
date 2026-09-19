@@ -43,7 +43,7 @@ def make_item(
 @pytest.fixture
 def headers() -> dict[str, str]:
     """Auth headers for the fake Jellyfin server."""
-    return {"X-MediaBrowser-Token": "test-token"}
+    return {"Authorization": 'MediaBrowser Token="test-token"'}
 
 
 def items_page(items: list[dict[str, Any]], total: int) -> dict[str, Any]:
