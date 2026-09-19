@@ -9,7 +9,7 @@ SERVICE = "Jellyfin"
 
 def build_headers(token: str) -> dict[str, str]:
     """Build Jellyfin auth headers."""
-    return {"X-MediaBrowser-Token": token}
+    return {"Authorization": f'MediaBrowser Token="{token}"'}
 
 
 def get_users(base_url: str, headers: dict[str, str]) -> list[dict]:
