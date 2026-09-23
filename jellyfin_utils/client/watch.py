@@ -51,6 +51,23 @@ def get_watchers_per_item(
     return watchers
 
 
+def get_watched_item_ids(
+    base_url: str,
+    headers: dict[str, str],
+    user_id: str,
+    item_type: str,
+) -> set[str]:
+    """Return the item IDs of a given type that a single user has fully watched."""
+    params = {
+        "UserId": user_id,
+        "IncludeItemTypes": item_type,
+        "Recursive": "true",
+        "Filters": "IsPlayed",
+        "EnableUserData": "true",
+    }
+    return {item["Id"] for item in iter_items(base_url, headers, params) if item.get("Id")}
+
+
 def get_watch_counts_per_item(
     base_url: str,
     headers: dict[str, str],

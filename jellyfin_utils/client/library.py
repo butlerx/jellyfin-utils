@@ -77,17 +77,23 @@ def get_all_items(
     ),
 ) -> list[LibraryItem]:
     """Fetch library items as immutable ``LibraryItem`` instances, minus episode-less series."""
-    params = {
-        "IncludeItemTypes": include_types,
-        "Recursive": "true",
-        "EnableUserData": "false",
-        "Fields": fields,
-    }
-    items = [
-        item
-        for raw in iter_items(base_url, headers, params)
-        if (item := LibraryItem.from_api(raw)) is not None
-    ]
+    # Querying every type in one /Items call lets a stable per-request sort still land
+    # differently across item *kinds* at this library's scale (thousands of episodes sorting
+    # alongside a few hundred movies), which silently drops items across page boundaries.
+    # One call per type keeps each server-side sort+paginate small and reliable.
+    items: list[LibraryItem] = []
+    for item_type in include_types.split(","):
+        params = {
+            "IncludeItemTypes": item_type,
+            "Recursive": "true",
+            "EnableUserData": "false",
+            "Fields": fields,
+        }
+        items.extend(
+            item
+            for raw in iter_items(base_url, headers, params)
+            if (item := LibraryItem.from_api(raw)) is not None
+        )
     if "Series" in include_types and "Episode" in include_types:
         return roll_up_series_sizes(drop_empty_series(items))
     return items

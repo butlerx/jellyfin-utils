@@ -25,6 +25,11 @@ def iter_items(
     Stops when a page comes back empty or ``TotalRecordCount`` has been reached,
     so a library larger than one page is never silently truncated.
     """
+    # Without an explicit, unique sort key, Jellyfin's default ordering is not guaranteed
+    # stable across requests (ties on SortName resolve arbitrarily), so items can shift between
+    # pages and get silently skipped. Sorting by Id breaks every tie deterministically.
+    stable_params = {"SortBy": "SortName,Id", "SortOrder": "Ascending", **params}
+
     start = 0
     while True:
         payload = cast(
@@ -33,7 +38,7 @@ def iter_items(
                 base_url,
                 headers,
                 "/Items",
-                params={**params, "Limit": PAGE_SIZE, "StartIndex": start},
+                params={**stable_params, "Limit": PAGE_SIZE, "StartIndex": start},
             ),
         )
         page = payload.get("Items") or []

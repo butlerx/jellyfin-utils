@@ -11,6 +11,7 @@ from jellyfin_utils.options import connection_options, jellyseerr_options, outpu
 from jellyfin_utils.output import OutputFormat, Report, emit
 from jellyfin_utils.user.models import CloneUserOutcome, CloneUserRequest
 from jellyfin_utils.user.render import emit_clone_report, emit_verification_report
+from jellyfin_utils.user.watched import run_watched
 from jellyfin_utils.user.workflow import clone_user as run_clone_user, verify_clone as run_verify_clone
 
 
@@ -232,3 +233,12 @@ def verify_clone(
         output_format,
         details_file,
     )
+
+
+@user.command("watched")
+@click.argument("usernames", nargs=-1, required=True)
+@connection_options
+@output_option
+def watched(usernames: tuple[str, ...], base_url: str, token: str, output_format: OutputFormat) -> None:
+    """List USERNAMES' watched movies and fully-watched series, largest on-disk size first."""
+    run_watched(usernames, base_url, token, output_format)

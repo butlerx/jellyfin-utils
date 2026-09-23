@@ -169,6 +169,8 @@ def test_health_reports_unusable_records_as_json() -> None:
         {"Id": "zero", "Name": "Zero", "Type": "Movie", "Path": "/m/z.mkv"},
     ]
     responses.get(f"{BASE_URL}/Items", json=items_page(page, total=3))
+    responses.get(f"{BASE_URL}/Items", json=items_page([], total=0))
+    responses.get(f"{BASE_URL}/Items", json=items_page([], total=0))
 
     result = RUNNER.invoke(cli, ["health", "--server", BASE_URL, "--token", "t", "--output", "json"])
 
@@ -193,6 +195,8 @@ def test_duplicates_groups_items_sharing_a_tmdb_id() -> None:
         {"Id": "c", "Name": "Other", "Type": "Movie", "Path": "/m/c.mkv", "ProviderIds": {"Tmdb": "12"}},
     ]
     responses.get(f"{BASE_URL}/Items", json=items_page(page, total=3))
+    responses.get(f"{BASE_URL}/Items", json=items_page([], total=0))
+    responses.get(f"{BASE_URL}/Items", json=items_page([], total=0))
 
     result = RUNNER.invoke(cli, ["duplicates", "--server", BASE_URL, "--token", "t", "--output", "json"])
 
@@ -303,6 +307,7 @@ def test_every_command_was_discovered() -> None:
         "user add",
         "user clone",
         "user verify-clone",
+        "user watched",
         "watched",
     }
 

@@ -14,6 +14,7 @@ EXPECTED_EXPORTS = {
     "get_json": transport.get_json,
     "get_users": transport.get_users,
     "get_watch_counts_per_item": watch.get_watch_counts_per_item,
+    "get_watched_item_ids": watch.get_watched_item_ids,
     "get_watchers_per_item": watch.get_watchers_per_item,
     "iter_items": pagination.iter_items,
     "parse_last_played": library.parse_last_played,

@@ -13,18 +13,18 @@ Estimated total effort: **4–6 engineering days**.
 - [x] `uv run ruff check jellyfin_utils/ tests/` passes.
 - [x] `uv run ty check jellyfin_utils/` passes.
 - [x] CI runs repository hooks and pytest on Python 3.12, 3.13, and 3.14.
-- [x] Initial branch-coverage baseline recorded: **75.51%**; current enforced floor:
-      **89%**.
+- [x] Initial branch-coverage baseline recorded: **75.51%**; current enforced
+      floor: **89%**.
 
 ## Progress
 
-| Phase | Outcome                                           |   Estimate | Depends on | Status      |
-| ----- | ------------------------------------------------- | ---------: | ---------- | ----------- |
-| 1     | Characterization tests and coverage gate          |  4–6 hours | —          | Complete    |
-| 2     | User-clone workflow separated by responsibility   | 1.5–2 days | Phase 1    | Complete    |
-| 3     | Shared watched/stale/reclaim pipeline             | 1.5–2 days | Phase 1    | Complete    |
-| 4     | Jellyfin client split behind compatibility façade |  6–8 hours | Phase 1    | Complete    |
-| 5     | Architecture boundaries documented and enforced   |  3–4 hours | Phases 2–4 | Complete    |
+| Phase | Outcome                                           |   Estimate | Depends on | Status   |
+| ----- | ------------------------------------------------- | ---------: | ---------- | -------- |
+| 1     | Characterization tests and coverage gate          |  4–6 hours | —          | Complete |
+| 2     | User-clone workflow separated by responsibility   | 1.5–2 days | Phase 1    | Complete |
+| 3     | Shared watched/stale/reclaim pipeline             | 1.5–2 days | Phase 1    | Complete |
+| 4     | Jellyfin client split behind compatibility façade |  6–8 hours | Phase 1    | Complete |
+| 5     | Architecture boundaries documented and enforced   |  3–4 hours | Phases 2–4 | Complete |
 
 ## Rules for every phase
 

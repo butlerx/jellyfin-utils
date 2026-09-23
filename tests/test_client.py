@@ -120,11 +120,11 @@ def test_iter_items_makes_one_call_when_the_first_page_is_the_whole_set(
 
 @responses.activate
 def test_get_all_items_paginates_and_rolls_up_series(headers: dict[str, str]) -> None:
-    page_one = [
+    series_page = [
         {"Id": "s1", "Name": "Show", "Type": "Series"},
         {"Id": "s2", "Name": "Empty", "Type": "Series"},
     ]
-    page_two = [
+    episode_page = [
         {
             "Id": "e1",
             "Name": "Ep 1",
@@ -133,8 +133,11 @@ def test_get_all_items_paginates_and_rolls_up_series(headers: dict[str, str]) ->
             "MediaSources": [{"Size": 500}],
         },
     ]
-    responses.get(ITEMS_URL, json=items_page(page_one, total=3))
-    responses.get(ITEMS_URL, json=items_page(page_two, total=3))
+    # get_all_items now walks each type in its own request (Movie, then Series, then Episode),
+    # so each type gets its own page in registration order.
+    responses.get(ITEMS_URL, json=items_page([], total=0))
+    responses.get(ITEMS_URL, json=items_page(series_page, total=2))
+    responses.get(ITEMS_URL, json=items_page(episode_page, total=1))
 
     items = {item.item_id: item for item in get_all_items(BASE_URL, headers)}
 
