@@ -9,7 +9,7 @@ updates:
     # Match the 7-day cooldown the pre-commit config uses for its own updates.
     cooldown:
       default-days: 7
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     commit-message:
       prefix: 'build'
       prefix-development: 'chore'
@@ -26,6 +26,6 @@ updates:
       day: monday
     cooldown:
       default-days: 7
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     commit-message:
       prefix: 'ci'
