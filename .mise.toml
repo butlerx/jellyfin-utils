@@ -1,0 +1,51 @@
+[tools]
+uv         = "latest"
+ruff       = "latest"
+ty         = "latest"
+prek       = "latest"
+shellcheck = "latest"
+tombi      = "1.11.2"
+zizmor     = "latest"
+
+[settings]
+experimental = true
+lockfile     = true
+
+[tasks.build]
+description = "Build the sdist and wheel"
+run         = "uv build"
+
+[tasks.test]
+description = "Run tests"
+usage       = 'arg "[args]" var=#true help="Additional arguments passed to pytest"'
+run         = "uv run pytest ${usage_args:-}"
+alias       = "t"
+
+[tasks.lint]
+description = "Lint code with ruff and ty"
+run         = ["uv run ruff check", "uv run ty check"]
+
+[tasks."lint:fix"]
+description = "Fix lint issues"
+run         = "uv run ruff check --fix"
+
+[tasks.format]
+description = "Format Python"
+run         = "uv run ruff format"
+alias       = "f"
+
+[tasks."format:check"]
+description = "Check Python formatting"
+run         = "uv run ruff format --check"
+
+[tasks.check]
+description = "Run all checks (format, lint, test)"
+depends     = ["format:check", "lint", "test"]
+
+[tasks."check:actions"]
+description = "Lint GitHub Actions workflows"
+run         = "zizmor --no-progress .github"
+
+[tasks.hooks]
+description = "Install the prek git hooks"
+run         = "prek install --install-hooks --hook-type pre-commit --hook-type commit-msg"
