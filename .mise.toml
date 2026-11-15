@@ -1,10 +1,11 @@
 [tools]
-uv     = "latest"
-ruff   = "latest"
-ty     = "latest"
-prek   = "latest"
-tombi  = "1.2.5"
-zizmor = "latest"
+uv         = "latest"
+ruff       = "latest"
+ty         = "latest"
+prek       = "latest"
+shellcheck = "latest"
+tombi      = "1.11.2"
+zizmor     = "latest"
 
 [settings]
 experimental = true

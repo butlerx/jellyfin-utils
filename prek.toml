@@ -6,16 +6,8 @@ update = { cooldown_days = 7, freeze = true }
 
 [[repos]]
 repo  = "https://github.com/pre-commit/pre-commit-hooks"
-rev   = "3e8a8703264a2f4a69428a0aa4dcb512790b2c8c"        # v6.0.0
-hooks = [
-  { id = "trailing-whitespace" },
-  { id = "end-of-file-fixer" },
-  { id = "check-toml" },
-  { id = "check-yaml" },
-  { id = "check-json" },
-  { id = "check-merge-conflict" },
-  { id = "check-added-large-files" }
-]
+rev   = "3e8a8703264a2f4a69428a0aa4dcb512790b2c8c"                                                                                                                                                                # v6.0.0
+hooks = [{ id = "trailing-whitespace" }, { id = "end-of-file-fixer" }, { id = "check-toml" }, { id = "check-yaml" }, { id = "check-json" }, { id = "check-merge-conflict" }, { id = "check-added-large-files" }]
 
 [[repos]]
 repo  = "https://github.com/compilerla/conventional-pre-commit"
@@ -24,7 +16,7 @@ hooks = [{ id = "conventional-pre-commit", stages = ["commit-msg"] }]
 
 [[repos]]
 repo  = "https://github.com/tombi-toml/tombi-pre-commit"
-rev   = "5421ca8ca3d6a659b6c097512b486395676a6af1"
+rev   = "6f428aba5ced98b5a579ff23cab6b39822b4347d"        # v1.11.2
 hooks = [{ id = "tombi-format" }, { id = "tombi-lint" }]
 
 [[repos]]
@@ -40,13 +32,7 @@ hooks = [{ id = "yamlfmt" }]
 [[repos]]
 repo  = "https://github.com/zizmorcore/zizmor-pre-commit"
 rev   = "067260dc5fe6ea86b7551bfd6f8b3ba4e6c93129"
-hooks = [
-  {
-    id             = "zizmor",
-    pass_filenames = false,
-    args           = ["--no-progress", ".github"]
-  }
-]
+hooks = [{ id = "zizmor", pass_filenames = false, args = ["--no-progress", ".github"] }]
 
 [[repos]]
 repo  = "https://github.com/astral-sh/ruff-pre-commit"
@@ -68,12 +54,5 @@ hooks = [
   #
   # Type errors are not local to the changed file, so the whole project is
   # always checked; `types_or` only decides whether to check at all.
-  {
-    id             = "ty-check",
-    name           = "ty-check",
-    language       = "system",
-    entry          = "uv run --frozen ty check",
-    pass_filenames = false,
-    types_or       = ["python", "pyi"]
-  }
+  { id = "ty-check", name = "ty-check", language = "system", entry = "uv run --frozen ty check", pass_filenames = false, types_or = ["python", "pyi"] }
 ]
