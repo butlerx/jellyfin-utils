@@ -1,0 +1,79 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+update = { cooldown_days = 7, freeze = true }
+
+[[repos]]
+repo  = "https://github.com/pre-commit/pre-commit-hooks"
+rev   = "3e8a8703264a2f4a69428a0aa4dcb512790b2c8c"        # v6.0.0
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-toml" },
+  { id = "check-yaml" },
+  { id = "check-json" },
+  { id = "check-merge-conflict" },
+  { id = "check-added-large-files" }
+]
+
+[[repos]]
+repo  = "https://github.com/compilerla/conventional-pre-commit"
+rev   = "91ab4bf57e58b32adf1a122681f6ebe164d081c8"                     # v4.4.0
+hooks = [{ id = "conventional-pre-commit", stages = ["commit-msg"] }]
+
+[[repos]]
+repo  = "https://github.com/tombi-toml/tombi-pre-commit"
+rev   = "5421ca8ca3d6a659b6c097512b486395676a6af1"
+hooks = [{ id = "tombi-format" }, { id = "tombi-lint" }]
+
+[[repos]]
+repo  = "https://github.com/rhysd/actionlint"
+rev   = "914e7df21a07ef503a81201c76d2b11c789d3fca"  # v1.7.12
+hooks = [{ id = "actionlint" }]
+
+[[repos]]
+repo  = "https://github.com/google/yamlfmt"
+rev   = "21ca5323a9c87ee37a434e0ca908efc0a89daa07"  # v0.21.0
+hooks = [{ id = "yamlfmt" }]
+
+[[repos]]
+repo  = "https://github.com/zizmorcore/zizmor-pre-commit"
+rev   = "067260dc5fe6ea86b7551bfd6f8b3ba4e6c93129"
+hooks = [
+  {
+    id             = "zizmor",
+    pass_filenames = false,
+    args           = ["--no-progress", ".github"]
+  }
+]
+
+[[repos]]
+repo  = "https://github.com/astral-sh/ruff-pre-commit"
+rev   = "39d9ac5938dadb73df0564a45f163e25ff9fa6e2"                         # v0.16.1
+hooks = [{ id = "ruff-check", args = ["--fix"] }, { id = "ruff-format" }]
+
+[[repos]]
+repo  = "https://github.com/astral-sh/uv-pre-commit"
+rev   = "e805244dd1bc999f2b4d716f5fa21ee87189b084"    # 0.12.2
+hooks = [{ id = "uv-lock" }]
+
+[[repos]]
+repo  = "local"
+hooks = [
+  # Runs the ty from uv.lock rather than a second, unpinned copy in a hook
+  # env — otherwise `uv run ty check` and this hook can disagree on the same
+  # code. `uv run` also resolves the project environment itself, so there is
+  # no hard-coded .venv path to go stale.
+  #
+  # Type errors are not local to the changed file, so the whole project is
+  # always checked; `types_or` only decides whether to check at all.
+  {
+    id             = "ty-check",
+    name           = "ty-check",
+    language       = "system",
+    entry          = "uv run --frozen ty check",
+    pass_filenames = false,
+    types_or       = ["python", "pyi"]
+  }
+]
