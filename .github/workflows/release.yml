@@ -85,6 +85,10 @@ jobs:
             echo "tag ${RELEASE_TAG} does not match pyproject version ${version}" >&2
             exit 1
           fi
+      # Release PRs are opened with GITHUB_TOKEN, so CI never runs on them;
+      # test here so a failing build can't reach PyPI.
+      - run: uv sync --frozen
+      - run: uv run pytest --cov
       - run: uv build
       - run: uvx twine check --strict dist/*
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
