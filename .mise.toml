@@ -3,7 +3,7 @@ uv     = "latest"
 ruff   = "latest"
 ty     = "latest"
 prek   = "latest"
-tombi  = "latest"
+tombi  = "1.2.5"
 zizmor = "latest"
 
 [settings]
