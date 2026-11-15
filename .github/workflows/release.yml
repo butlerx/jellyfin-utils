@@ -23,11 +23,38 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      pr: ${{ steps.release.outputs.pr }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
           token: ${{ github.token }}
+
+  # release-please bumps pyproject.toml but can't update uv.lock, so the lock's
+  # own-package version would drift and the uv-lock hook would fail the release PR.
+  sync-lock:
+    needs: release-please
+    if: needs.release-please.outputs.pr != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+          # Needed to push the lock update back to the release branch.
+          persist-credentials: true # zizmor: ignore[artipacked]
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - run: uv lock
+      - name: Commit the updated lock
+        run: |
+          git diff --quiet uv.lock && exit 0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: sync uv.lock with the release version' uv.lock
+          git push
 
   build:
     needs: release-please
