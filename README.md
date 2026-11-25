@@ -15,8 +15,8 @@ uv sync
 
 ### Environment Variables
 
-All commands share the Jellyfin connection settings. `watched`, `stale`, and
-`reclaim` can optionally use Jellyseerr for requester-watch prioritization;
+All commands share the Jellyfin connection settings. `watched`, `stale`,
+`reclaim`, and `user watched` can optionally use Jellyseerr for requester data;
 `requests` and `user clone` require Jellyseerr:
 
 | Variable            | Purpose                                        |
@@ -57,6 +57,8 @@ uv run jellyfin --version
 | `user add`           | Create a Jellyfin user                               |
 | `user clone`         | Clone a user's watch state, favorites, and playlists |
 | `user verify-clone`  | Verify cloned watch state, favorites, and playlists  |
+| `user watched`       | Movies and finished series a user (or users) watched |
+| `user progress`      | One user's season-by-season progress through a show |
 | `server status`      | Version, storage, failed tasks, active sessions      |
 | `server scan`        | Preview or start a library scan                      |
 | `server maintenance` | List or run built-in scheduled tasks                 |

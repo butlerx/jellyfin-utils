@@ -6,6 +6,7 @@ import datetime as dt
 
 from .library import parse_last_played
 from .pagination import iter_items
+from .transport import get_json
 
 
 def _is_played_recently(item: dict, cutoff: dt.datetime | None) -> bool:
@@ -77,3 +78,31 @@ def get_watch_counts_per_item(
     """Return a mapping of ``item_id`` to how many users have watched it (all-time)."""
     watchers = get_watchers_per_item(base_url, headers, users, ignore_usernames, max_age_days=None)
     return {item_id: len(usernames) for item_id, usernames in watchers.items()}
+
+
+def find_series(base_url: str, headers: dict[str, str], user_id: str, search: str) -> list[dict]:
+    """Return the series whose name matches ``search``, as seen by one user."""
+    params = {
+        "UserId": user_id,
+        "IncludeItemTypes": "Series",
+        "Recursive": "true",
+        "SearchTerm": search,
+    }
+    return list(iter_items(base_url, headers, params))
+
+
+def get_series_episodes(base_url: str, headers: dict[str, str], series_id: str, user_id: str) -> list[dict]:
+    """
+    Return every episode Jellyfin knows for a series, with one user's watch state.
+
+    This includes "virtual" episodes that have metadata but no file on disk, either because
+    they were deleted after being watched or because they were never downloaded.
+    """
+    payload = get_json(
+        base_url,
+        headers,
+        f"/Shows/{series_id}/Episodes",
+        params={"UserId": user_id, "Fields": "UserData,Path,MediaSources,PremiereDate"},
+    )
+    items = payload.get("Items") if isinstance(payload, dict) else None
+    return [item for item in items or [] if isinstance(item, dict)]

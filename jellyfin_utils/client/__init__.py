@@ -9,7 +9,13 @@ from .library import drop_empty_series, get_all_items, parse_last_played, roll_u
 from .models import LibraryItem, display_name, size_gb
 from .pagination import PAGE_SIZE, iter_items
 from .transport import build_headers, create_user, get_json, get_users, post_empty
-from .watch import get_watch_counts_per_item, get_watched_item_ids, get_watchers_per_item
+from .watch import (
+    find_series,
+    get_series_episodes,
+    get_watch_counts_per_item,
+    get_watched_item_ids,
+    get_watchers_per_item,
+)
 
 __all__ = [
     "PAGE_SIZE",
@@ -18,8 +24,10 @@ __all__ = [
     "create_user",
     "display_name",
     "drop_empty_series",
+    "find_series",
     "get_all_items",
     "get_json",
+    "get_series_episodes",
     "get_users",
     "get_watch_counts_per_item",
     "get_watched_item_ids",

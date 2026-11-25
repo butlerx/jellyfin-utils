@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import responses
@@ -12,7 +13,9 @@ from jellyfin_utils.client import (
     PAGE_SIZE,
     LibraryItem,
     drop_empty_series,
+    find_series,
     get_all_items,
+    get_series_episodes,
     get_watch_counts_per_item,
     get_watchers_per_item,
     iter_items,
@@ -21,6 +24,10 @@ from jellyfin_utils.client import (
 )
 
 ITEMS_URL = f"{BASE_URL}/Items"
+
+
+def _query(url: str | None) -> dict[str, str]:
+    return {key: values[0] for key, values in parse_qs(urlsplit(str(url)).query).items()}
 
 
 def test_drop_empty_series_keeps_series_matched_by_id() -> None:
@@ -221,3 +228,33 @@ def test_get_watch_counts_per_item_counts_users(headers: dict[str, str]) -> None
     counts = get_watch_counts_per_item(BASE_URL, headers, USERS[:2], set())
 
     assert counts == {"m1": 2}
+
+
+@responses.activate
+def test_find_series_searches_series_as_the_user(headers: dict[str, str]) -> None:
+    responses.get(ITEMS_URL, json=items_page([{"Id": "s1", "Name": "Landman"}], total=1))
+
+    assert find_series(BASE_URL, headers, "u1", "land") == [{"Id": "s1", "Name": "Landman"}]
+
+    params = _query(responses.calls[0].request.url)
+    assert params["UserId"] == "u1"
+    assert params["IncludeItemTypes"] == "Series"
+    assert params["SearchTerm"] == "land"
+
+
+@responses.activate
+def test_get_series_episodes_includes_user_data_and_skips_junk(headers: dict[str, str]) -> None:
+    responses.get(f"{BASE_URL}/Shows/s1/Episodes", json={"Items": [{"Id": "e1"}, "junk"]})
+
+    assert get_series_episodes(BASE_URL, headers, "s1", "u1") == [{"Id": "e1"}]
+
+    params = _query(responses.calls[0].request.url)
+    assert params["UserId"] == "u1"
+    assert "UserData" in params["Fields"]
+
+
+@responses.activate
+def test_get_series_episodes_tolerates_an_unexpected_body(headers: dict[str, str]) -> None:
+    responses.get(f"{BASE_URL}/Shows/s1/Episodes", json=["not", "a", "page"])
+
+    assert get_series_episodes(BASE_URL, headers, "s1", "u1") == []

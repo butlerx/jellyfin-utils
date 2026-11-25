@@ -306,6 +306,7 @@ def test_every_command_was_discovered() -> None:
         "stale",
         "user add",
         "user clone",
+        "user progress",
         "user verify-clone",
         "user watched",
         "watched",

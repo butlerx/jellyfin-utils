@@ -136,3 +136,102 @@ def test_user_with_nothing_watched_has_no_notes(monkeypatch: pytest.MonkeyPatch)
         "carol — Movies (0 watched)",
         "carol — Series (0 finished)",
     ]
+
+
+def _two_users_library(monkeypatch: pytest.MonkeyPatch) -> None:
+    items = [
+        make_item("m1", "Movie", name="Shared", size=3 * GIB, tmdb_id=10),
+        make_item("m2", "Movie", name="Alice only", size=2 * GIB, tmdb_id=20),
+        make_item("s1", "Series", name="Shared show", size=5 * GIB, tmdb_id=30),
+    ]
+    _library(monkeypatch, items, [{"Name": "alice", "Id": "a"}, {"Name": "bob", "Id": "b"}])
+    watched_ids = {
+        ("a", "Movie"): {"m1", "m2"},
+        ("a", "Series"): {"s1"},
+        ("b", "Movie"): {"m1"},
+        ("b", "Series"): {"s1"},
+    }
+    monkeypatch.setattr(
+        watched,
+        "get_watched_item_ids",
+        lambda _url, _headers, user_id, item_type: watched_ids[user_id, item_type],
+    )
+
+
+def test_together_lists_only_titles_every_user_watched(monkeypatch: pytest.MonkeyPatch) -> None:
+    _two_users_library(monkeypatch)
+    reports = _capture(monkeypatch)
+
+    watched.run_watched(("alice", "bob"), "http://jf", "token", OutputFormat.JSON, together=True)
+
+    together = reports[0].payload["together"]
+    assert together["users"] == ["alice", "bob"]
+    assert [entry["name"] for entry in together["movies"]["sized"]] == ["Shared"]
+    assert [entry["name"] for entry in together["series"]["sized"]] == ["Shared show"]
+    assert [table.title for table in reports[0].tables] == [
+        "Watched by all of alice, bob — Movies (1 watched)",
+        "Watched by all of alice, bob — Series (1 finished)",
+    ]
+
+
+def test_together_needs_two_users(monkeypatch: pytest.MonkeyPatch) -> None:
+    _two_users_library(monkeypatch)
+
+    with pytest.raises(click.UsageError, match="at least two usernames"):
+        watched.run_watched(("alice", "alice"), "http://jf", "token", OutputFormat.TEXT, together=True)
+
+
+def test_requested_keeps_only_the_users_own_requests(monkeypatch: pytest.MonkeyPatch) -> None:
+    _two_users_library(monkeypatch)
+    reports = _capture(monkeypatch)
+    requesters = {10: ("bob",), 20: ("Alice",), 30: ("alice", "bob")}
+
+    watched.run_watched(
+        ("alice",), "http://jf", "token", OutputFormat.JSON, requested=True, requesters_by_tmdb_id=requesters
+    )
+
+    alice = reports[0].payload["users"]["alice"]
+    assert alice["movies"]["sized"] == [{"name": "Alice only", "size": 2 * GIB, "requested_by": ["Alice"]}]
+    assert alice["series"]["sized"] == [
+        {"name": "Shared show", "size": 5 * GIB, "requested_by": ["alice", "bob"]}
+    ]
+    assert ("Filter", "requested in Jellyseerr by the user") in reports[0].summary
+
+
+def test_requested_with_together_matches_any_listed_requester(monkeypatch: pytest.MonkeyPatch) -> None:
+    _two_users_library(monkeypatch)
+    reports = _capture(monkeypatch)
+
+    watched.run_watched(
+        ("alice", "bob"),
+        "http://jf",
+        "token",
+        OutputFormat.JSON,
+        together=True,
+        requested=True,
+        requesters_by_tmdb_id={10: ("bob",)},
+    )
+
+    together = reports[0].payload["together"]
+    assert [entry["name"] for entry in together["movies"]["sized"]] == ["Shared"]
+    assert together["series"]["sized"] == []
+
+
+def test_requested_needs_jellyseerr(monkeypatch: pytest.MonkeyPatch) -> None:
+    _two_users_library(monkeypatch)
+
+    with pytest.raises(click.UsageError, match="--requested needs Jellyseerr"):
+        watched.run_watched(("alice",), "http://jf", "token", OutputFormat.TEXT, requested=True)
+
+
+def test_requesters_add_a_requested_by_column(monkeypatch: pytest.MonkeyPatch) -> None:
+    _two_users_library(monkeypatch)
+    reports = _capture(monkeypatch)
+
+    watched.run_watched(
+        ("bob",), "http://jf", "token", OutputFormat.TEXT, requesters_by_tmdb_id={10: ("bob",)}
+    )
+
+    movies_table = reports[0].tables[0]
+    assert movies_table.columns == ("Title", "Requested by", "Size")
+    assert movies_table.rows == [("Shared", "bob", "3.00 GiB")]

@@ -534,6 +534,85 @@ A successful comparison reports `Verified: yes`. A differing comparison is a
 valid report rather than a command error, so automation should check the JSON
 `verified` field.
 
+### `jellyfin user watched USERNAME...`
+
+Lists each user's watched movies and finished series, largest on-disk size
+first. A series counts as finished when every episode still on disk is played;
+episodes deleted after watching, or never downloaded, are not checked. Use
+`user progress` for that. Titles with no on-disk size are summarised in a note
+rather than listed.
+
+With Jellyseerr configured (flags or `JELLYSEERR_*` variables), every table gains
+a **Requested by** column.
+
+#### Options
+
+| Option        | Description                                                         |
+| ------------- | ------------------------------------------------------------------- |
+| `--together`  | One list of titles _every_ USERNAME has watched (needs two or more) |
+| `--requested` | Only titles the user requested in Jellyseerr; with `--together`, titles any listed user requested. Needs Jellyseerr |
+
+```bash
+# What has isobel watched, and what can be cleared?
+uv run jellyfin user watched isobel
+
+# Titles isobel requested and has watched
+uv run jellyfin user watched isobel --requested
+
+# Titles both butlerx and isobel have watched
+uv run jellyfin user watched butlerx isobel --together
+```
+
+JSON keeps the per-user shape `{"users": {name: {"movies": ..., "series": ...}}}`;
+with `--together` it is `{"together": {"users": [...], "movies": ..., "series": ...}}`.
+Each section holds `sized` entries (`name`, `size`, and `requested_by` when
+Jellyseerr is configured), `unsized_count`, and `unsized_names`.
+
+### `jellyfin user progress USERNAME SHOW`
+
+How far USERNAME is through SHOW, season by season. SHOW is a search term; an
+exact title match wins, and an ambiguous term lists the candidates. Counts cover
+every **aired** episode Jellyfin knows about, including ones deleted from disk
+or never downloaded, so "watched what is on disk" and "watched the whole show"
+are reported separately. Unaired episodes and season 0 specials are left out.
+
+Each episode is `played`, `unplayed`, or `started`. `started` means a last-played
+date without the played mark: stopped early, or watched somewhere Jellyfin did
+not track.
+
+#### Options
+
+| Option           | Description                                   |
+| ---------------- | --------------------------------------------- |
+| `--specials`     | Count season 0 specials too                   |
+| `--all-episodes` | List every episode, not just the unplayed ones |
+
+```bash
+uv run jellyfin user progress isobel Landman
+uv run jellyfin user progress isobel "Slow Horses" --all-episodes --output json
+```
+
+#### Sample output
+
+```text
+Landman — isobel
+Verdict: Partway through.
+Played: 13 of 20 aired episodes
+On disk: 7 episodes (28.43 GiB), 1 played
+
+Seasons (2)
+Season  Played  On disk played       Size  Last played
+------------------------------------------------------
+1         9/10             0/0   0.00 GiB  2026-05-05
+2         4/10             1/7  28.43 GiB  2026-06-22
+
+Not played (7)
+Episode  Title                     State     On disk  Last played
+-----------------------------------------------------------------
+S01E07   All Roads Lead To A Hole  started   no       2026-05-03
+S02E05   The Pirate Dinner         unplayed  yes      —
+```
+
 ---
 
 ## Server-management commands

@@ -7,9 +7,16 @@ import pathlib
 import click
 
 from jellyfin_utils.client import build_headers, create_user, get_users
-from jellyfin_utils.options import connection_options, jellyseerr_options, output_option
+from jellyfin_utils.jellyseerr import get_requesters_by_tmdb_id
+from jellyfin_utils.options import (
+    connection_options,
+    jellyseerr_options,
+    output_option,
+    require_jellyseerr_pair,
+)
 from jellyfin_utils.output import OutputFormat, Report, emit
 from jellyfin_utils.user.models import CloneUserOutcome, CloneUserRequest
+from jellyfin_utils.user.progress import run_progress
 from jellyfin_utils.user.render import emit_clone_report, emit_verification_report
 from jellyfin_utils.user.watched import run_watched
 from jellyfin_utils.user.workflow import clone_user as run_clone_user, verify_clone as run_verify_clone
@@ -238,7 +245,75 @@ def verify_clone(
 @user.command("watched")
 @click.argument("usernames", nargs=-1, required=True)
 @connection_options
+@jellyseerr_options
+@click.option("--together", is_flag=True, help="Only list titles every USERNAME has watched.")
+@click.option(
+    "--requested",
+    is_flag=True,
+    help="Only list titles the user requested in Jellyseerr (any listed user with --together).",
+)
 @output_option
-def watched(usernames: tuple[str, ...], base_url: str, token: str, output_format: OutputFormat) -> None:
-    """List USERNAMES' watched movies and fully-watched series, largest on-disk size first."""
-    run_watched(usernames, base_url, token, output_format)
+def watched(
+    usernames: tuple[str, ...],
+    base_url: str,
+    token: str,
+    jellyseerr_server: str | None,
+    jellyseerr_token: str | None,
+    together: bool,
+    requested: bool,
+    output_format: OutputFormat,
+) -> None:
+    """
+    List USERNAMES' watched movies and fully-watched series, largest on-disk size first.
+
+    A series counts as finished when every episode still on disk is played. With
+    Jellyseerr configured, each title also shows who requested it.
+    """
+    require_jellyseerr_pair(jellyseerr_server, jellyseerr_token)
+    requesters = (
+        get_requesters_by_tmdb_id(jellyseerr_server, jellyseerr_token)
+        if jellyseerr_server and jellyseerr_token
+        else None
+    )
+    run_watched(
+        usernames,
+        base_url,
+        token,
+        output_format,
+        together=together,
+        requested=requested,
+        requesters_by_tmdb_id=requesters,
+    )
+
+
+@user.command("progress")
+@click.argument("username")
+@click.argument("show")
+@connection_options
+@click.option("--specials", "include_specials", is_flag=True, help="Count season 0 specials too.")
+@click.option("--all-episodes", is_flag=True, help="List every episode, not just the unplayed ones.")
+@output_option
+def progress(
+    username: str,
+    show: str,
+    base_url: str,
+    token: str,
+    include_specials: bool,
+    all_episodes: bool,
+    output_format: OutputFormat,
+) -> None:
+    """
+    Show how much of SHOW USERNAME has watched, season by season.
+
+    Counts every aired episode, including ones deleted from disk or never downloaded, and
+    lists the episodes not yet played.
+    """
+    run_progress(
+        username,
+        show,
+        base_url,
+        token,
+        output_format,
+        include_specials=include_specials,
+        all_episodes=all_episodes,
+    )
