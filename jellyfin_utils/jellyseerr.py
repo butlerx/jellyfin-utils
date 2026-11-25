@@ -26,6 +26,8 @@ PAGE_SIZE = 100
 TIMEOUT = 30
 _ADMIN_PERMISSION = 2
 _MANAGE_USERS_PERMISSION = 8
+# Users imported from Jellyfin have a null ``username``; their name lives in ``jellyfinUsername``.
+_REQUESTER_NAME_FIELDS = ("jellyfinUsername", "username", "displayName")
 
 
 def _iter_requests(base_url: str, api_key: str) -> Iterator[dict]:
@@ -55,6 +57,12 @@ def _iter_requests(base_url: str, api_key: str) -> Iterator[dict]:
             return
 
 
+def _requester_name(request: dict) -> str | None:
+    """Return the requester's name, preferring the Jellyfin username used for watch matching."""
+    requester = request.get("requestedBy") or {}
+    return next((name for field in _REQUESTER_NAME_FIELDS if (name := requester.get(field))), None)
+
+
 def get_requests(base_url: str, api_key: str) -> list[dict]:
     """Return all Jellyseerr requests with fields useful for reconciliation."""
     results = []
@@ -64,7 +72,7 @@ def get_requests(base_url: str, api_key: str) -> list[dict]:
             {
                 "id": request.get("id"),
                 "status": request.get("status"),
-                "requested_by": (request.get("requestedBy") or {}).get("username"),
+                "requested_by": _requester_name(request),
                 "tmdb_id": media.get("tmdbId"),
                 "media_type": media.get("mediaType"),
             }
@@ -78,7 +86,7 @@ def get_requesters_by_tmdb_id(base_url: str, api_key: str) -> dict[int, tuple[st
     for request in _iter_requests(base_url, api_key):
         media = request.get("media") or {}
         tmdb_id = media.get("tmdbId")
-        username = (request.get("requestedBy") or {}).get("username")
+        username = _requester_name(request)
         if tmdb_id is None or not username:
             continue
         try:

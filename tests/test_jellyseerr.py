@@ -82,6 +82,30 @@ def test_requesters_are_grouped_per_tmdb_id_and_skip_bad_rows() -> None:
 
 
 @responses.activate
+def test_requester_name_falls_back_when_username_is_null() -> None:
+    requests_data = [
+        {"id": 1, "requestedBy": {"username": None, "jellyfinUsername": "isobel"}, "media": {"tmdbId": 1}},
+        {"id": 2, "requestedBy": {"username": "local", "jellyfinUsername": None}, "media": {"tmdbId": 2}},
+        {"id": 3, "requestedBy": {"username": "local", "jellyfinUsername": "linked"}, "media": {"tmdbId": 3}},
+        {"id": 4, "requestedBy": {"username": None, "displayName": "Shown"}, "media": {"tmdbId": 4}},
+    ]
+    _paged(f"{JELLYSEERR_URL}/api/v1/request", requests_data, page_size=10)
+
+    assert [entry["requested_by"] for entry in jellyseerr.get_requests(JELLYSEERR_URL, KEY)] == [
+        "isobel",
+        "local",
+        "linked",
+        "Shown",
+    ]
+    assert jellyseerr.get_requesters_by_tmdb_id(JELLYSEERR_URL, KEY) == {
+        1: ("isobel",),
+        2: ("local",),
+        3: ("linked",),
+        4: ("Shown",),
+    }
+
+
+@responses.activate
 def test_user_search_pages_and_ignores_non_dict_rows() -> None:
     users = [{"id": 1, "email": "a@example.com"}, "junk", {"id": 2, "email": "b@example.com"}]
     _paged(f"{JELLYSEERR_URL}/api/v1/user", users, page_size=2)
