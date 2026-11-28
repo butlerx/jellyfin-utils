@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.2](https://github.com/butlerx/jellyfin-utils/compare/v0.1.1...v0.1.2) (2026-11-28)
+
+
+### Features
+
+* add user progress and together/requested filters to user watched ([8c19d90](https://github.com/butlerx/jellyfin-utils/commit/8c19d909a4ddac11fc4f1961209142aec932a81d))
+
+
+### Bug Fixes
+
+* read requester names from jellyfinUsername ([ede293c](https://github.com/butlerx/jellyfin-utils/commit/ede293c08321f65422307132d241ae08f86ce4ed))
+
 ## [0.1.1](https://github.com/butlerx/jellyfin-utils/compare/v0.1.0...v0.1.1) (2026-11-15)
 
 
