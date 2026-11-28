@@ -1,6 +1,6 @@
 [project]
 name            = "jellyfin-utils"
-version         = "0.1.1"
+version         = "0.1.2"
 description     = "CLI for reclaiming Jellyfin storage: find watched, stale, and duplicate media, reconcile Jellyseerr requests, and run server tasks"
 readme          = "README.md"
 requires-python = ">=3.12"
